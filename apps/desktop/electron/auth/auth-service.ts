@@ -2,27 +2,13 @@ import { getLogger } from '../utils/logger';
 import { getDesktopCredentials, getBackendUrl } from '../config/credentials';
 import { secureTokenStore } from './token-store';
 import { httpClient } from '../api/http-client';
+import type { LoginResponse, User } from '@omnia/shared-types';
 
 const logger = getLogger();
 
-export interface AuthResponse {
-  access_token: string;
-  refresh_token?: string;
-  expiresIn?: number;
-  user?: {
-    id: string;
-    email: string;
-    name: string;
-    role: string;
-  };
-}
-
-export interface UserInfo {
-  id: string;
-  email: string;
-  name: string;
-  role: string;
-}
+// Re-export for convenience
+export type AuthResponse = LoginResponse;
+export type UserInfo = User;
 
 /**
  * Authentication service for desktop application
@@ -152,7 +138,7 @@ class AuthService {
       logger.info('Login successful');
 
       if (data.user) {
-        logger.info(`Logged in as: ${data.user.name} (${data.user.role})`);
+        logger.info(`Logged in as: ${data.user.firstName} ${data.user.lastName} (${data.user.role})`);
       }
 
       // Schedule automatic token refresh
@@ -176,7 +162,7 @@ class AuthService {
 
       if (user && user.id) {
         this.currentUser = user;
-        logger.info(`Token valid for user: ${user.name} (${user.email})`);
+        logger.info(`Token valid for user: ${user.firstName} ${user.lastName} (${user.email})`);
         return true;
       }
 

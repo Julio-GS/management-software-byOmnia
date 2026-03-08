@@ -132,7 +132,7 @@ class HttpClient {
 
               // Retry the original request
               logger.info(`Retrying ${originalRequest.url} with new token...`);
-              return this.client(originalRequest);
+              return this.client!(originalRequest);
             } catch (authError) {
               logger.error('Re-authentication failed:', authError);
               return Promise.reject(new Error('Failed to re-authenticate after 401'));
