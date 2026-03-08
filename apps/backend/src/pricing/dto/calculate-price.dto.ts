@@ -1,8 +1,9 @@
 import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
+import type { CalculatePriceDto as ICalculatePriceDto } from '@omnia/shared-types';
 
-export class CalculatePriceDto {
+export class CalculatePriceDto implements ICalculatePriceDto {
   @ApiProperty({
     description: 'Product cost',
     example: 100,

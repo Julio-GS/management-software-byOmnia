@@ -1,6 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
+import type { PriceCalculationResult, MarkupSource } from '@omnia/shared-types';
 
-export class PriceCalculationResultDto {
+// This DTO represents the shared PriceCalculationResult interface
+// No validation needed - this is a response type
+export class PriceCalculationResultDto implements PriceCalculationResult {
   @ApiProperty({
     description: 'Calculated price (cost * (1 + markup%))',
     example: 130.5,
@@ -24,5 +27,5 @@ export class PriceCalculationResultDto {
     enum: ['product', 'category', 'global'],
     example: 'global',
   })
-  markupSource: 'product' | 'category' | 'global';
+  markupSource: MarkupSource;
 }

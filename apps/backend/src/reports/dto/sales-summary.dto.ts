@@ -1,4 +1,45 @@
 import { ApiProperty } from '@nestjs/swagger';
+import type { SalesSummaryRequest } from '@omnia/shared-types';
+import { IsOptional, IsString, IsEnum } from 'class-validator';
+
+// Note: This file contains DTOs for the reports module
+// The shared SalesSummaryRequest is used for the request DTO
+// The other DTOs are backend-specific response types
+
+export class SalesSummaryRequestDto implements SalesSummaryRequest {
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  from?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  to?: string;
+
+  @ApiProperty({ required: false, enum: ['day', 'week', 'month', 'quarter', 'year', 'custom'] })
+  @IsOptional()
+  @IsEnum(['day', 'week', 'month', 'quarter', 'year', 'custom'])
+  period?: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'custom';
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  cashierId?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  deviceId?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  categoryId?: string;
+}
+
+// Legacy backend-specific DTOs (kept for backwards compatibility)
+// These should eventually be replaced with shared types
 
 export class SalesSummaryDto {
   @ApiProperty({ description: 'Total number of sales' })

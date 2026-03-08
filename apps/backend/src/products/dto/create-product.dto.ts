@@ -1,8 +1,9 @@
 import { IsString, IsNotEmpty, IsOptional, IsNumber, IsBoolean, Min, Max } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import type { CreateProductDto as ICreateProductDto } from '@omnia/shared-types';
 
-export class CreateProductDto {
+export class CreateProductDto implements ICreateProductDto {
   @ApiProperty({ example: 'Coca Cola 2.25L' })
   @IsString()
   @IsNotEmpty()

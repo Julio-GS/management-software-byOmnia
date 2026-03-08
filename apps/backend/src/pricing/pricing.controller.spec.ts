@@ -115,7 +115,7 @@ describe('PricingController', () => {
   describe('updateGlobalMarkup', () => {
     it('should update global markup (admin only)', async () => {
       const dto: UpdateGlobalMarkupDto = {
-        percentage: 35,
+        markup: 35,
       };
 
       mockPricingService.updateGlobalMarkup.mockResolvedValue(undefined);

@@ -93,10 +93,10 @@ export class PricingController {
   async updateGlobalMarkup(
     @Body() updateGlobalMarkupDto: UpdateGlobalMarkupDto,
   ): Promise<{ message: string; percentage: number }> {
-    await this.pricingService.updateGlobalMarkup(updateGlobalMarkupDto.percentage);
+    await this.pricingService.updateGlobalMarkup(updateGlobalMarkupDto.markup);
     return {
-      message: `Global markup updated to ${updateGlobalMarkupDto.percentage}%`,
-      percentage: updateGlobalMarkupDto.percentage,
+      message: `Global markup updated to ${updateGlobalMarkupDto.markup}%`,
+      percentage: updateGlobalMarkupDto.markup,
     };
   }
 

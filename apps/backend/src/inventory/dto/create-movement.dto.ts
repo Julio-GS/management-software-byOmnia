@@ -1,9 +1,9 @@
 import { IsString, IsNotEmpty, IsNumber, IsOptional, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { MovementType } from '../entities/inventory-movement.entity';
+import type { CreateMovementDto as ICreateMovementDto, MovementType } from '@omnia/shared-types';
 
-export class CreateMovementDto {
+export class CreateMovementDto implements ICreateMovementDto {
   @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440000' })
   @IsString()
   @IsNotEmpty()

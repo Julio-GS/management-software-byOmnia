@@ -1,8 +1,9 @@
 import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsNumber, Min, Max } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import type { CreateCategoryDto as ICreateCategoryDto } from '@omnia/shared-types';
 
-export class CreateCategoryDto {
+export class CreateCategoryDto implements ICreateCategoryDto {
   @ApiProperty({ example: 'Bebidas' })
   @IsString()
   @IsNotEmpty()

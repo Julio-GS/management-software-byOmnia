@@ -2,19 +2,13 @@ import { IsString, IsNotEmpty, IsNumber, Min, IsOptional, IsArray, ValidateNeste
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { CreateSaleItemDto } from './create-sale-item.dto';
+import type { CreateSaleDto as ICreateSaleDto, PaymentMethod } from '@omnia/shared-types';
 
-enum PaymentMethod {
-  CASH = 'cash',
-  CARD = 'card',
-  TRANSFER = 'transfer',
-  MIXED = 'mixed',
-}
-
-export class CreateSaleDto {
-  @ApiProperty({ example: 'cash', enum: PaymentMethod })
-  @IsEnum(PaymentMethod)
+export class CreateSaleDto implements ICreateSaleDto {
+  @ApiProperty({ example: 'cash', enum: ['cash', 'card', 'transfer', 'mixed'] })
+  @IsEnum(['cash', 'card', 'transfer', 'mixed'])
   @IsNotEmpty()
-  paymentMethod: string;
+  paymentMethod: PaymentMethod;
 
   @ApiProperty({ example: 0, default: 0 })
   @IsNumber()
