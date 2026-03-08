@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber, IsBoolean, Min, IsDecimal } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsNumber, IsBoolean, Min, Max } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -60,6 +60,14 @@ export class CreateProductDto {
   @IsString()
   @IsOptional()
   categoryId?: string;
+
+  @ApiProperty({ example: 35, description: 'Product-specific markup percentage (overrides category/global)', required: false })
+  @IsNumber()
+  @Type(() => Number)
+  @Min(0)
+  @Max(1000)
+  @IsOptional()
+  markup?: number;
 
   @ApiProperty({ example: 21.00, default: 0 })
   @IsNumber()

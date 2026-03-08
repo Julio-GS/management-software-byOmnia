@@ -7,7 +7,7 @@
 # ==========================================
 
 # Root-level documentation (exclude all except workspace READMEs)
-/*.md
+#/*.md
 !README.md
 
 # Documentation directory
@@ -20,7 +20,7 @@ docs/
 *.pdf
 
 # Architecture and planning files
-Arquitectura-roadmap.md
+#Arquitectura-roadmap.md
 definiciones de arq y casos edge.txt
 grafico arquitectura.png
 HANDOFF_TO_ORCHESTRATOR.md

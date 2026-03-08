@@ -27,36 +27,60 @@ async function main() {
 
   console.log('✅ Created default admin user:', adminUser.email);
 
+  // Create global settings
+  const globalMarkupSetting = await prisma.settings.upsert({
+    where: { key: 'globalMarkup' },
+    update: {},
+    create: {
+      key: 'globalMarkup',
+      value: 30, // 30% default markup
+    },
+  });
+
+  console.log('✅ Created global settings:', globalMarkupSetting.key);
+
   // Create categories
   const categories = await Promise.all([
-    prisma.category.create({
-      data: {
+    prisma.category.upsert({
+      where: { name: 'Bebidas' },
+      update: {},
+      create: {
         name: 'Bebidas',
         description: 'Bebidas y refrescos',
+        defaultMarkup: 35.00, // 35% markup for beverages
         color: '#3B82F6',
         icon: 'droplet',
       },
     }),
-    prisma.category.create({
-      data: {
+    prisma.category.upsert({
+      where: { name: 'Alimentos' },
+      update: {},
+      create: {
         name: 'Alimentos',
         description: 'Productos alimenticios',
+        defaultMarkup: 40.00, // 40% markup for groceries
         color: '#10B981',
         icon: 'utensils',
       },
     }),
-    prisma.category.create({
-      data: {
+    prisma.category.upsert({
+      where: { name: 'Limpieza' },
+      update: {},
+      create: {
         name: 'Limpieza',
         description: 'Productos de limpieza',
+        defaultMarkup: 30.00, // 30% markup for cleaning products
         color: '#F59E0B',
         icon: 'spray-can',
       },
     }),
-    prisma.category.create({
-      data: {
+    prisma.category.upsert({
+      where: { name: 'Higiene Personal' },
+      update: {},
+      create: {
         name: 'Higiene Personal',
         description: 'Productos de higiene y cuidado personal',
+        defaultMarkup: 45.00, // 45% markup for personal care
         color: '#EC4899',
         icon: 'hand-heart',
       },
@@ -68,8 +92,10 @@ async function main() {
   // Create products
   const products = await Promise.all([
     // Bebidas
-    prisma.product.create({
-      data: {
+    prisma.product.upsert({
+      where: { sku: 'BEB-001' },
+      update: {},
+      create: {
         name: 'Coca Cola 2.25L',
         description: 'Gaseosa Coca Cola 2.25 litros',
         sku: 'BEB-001',
@@ -83,8 +109,10 @@ async function main() {
         taxRate: 21.00,
       },
     }),
-    prisma.product.create({
-      data: {
+    prisma.product.upsert({
+      where: { sku: 'BEB-002' },
+      update: {},
+      create: {
         name: 'Agua Mineral Villavicencio 2L',
         description: 'Agua mineral sin gas',
         sku: 'BEB-002',
@@ -98,8 +126,10 @@ async function main() {
         taxRate: 21.00,
       },
     }),
-    prisma.product.create({
-      data: {
+    prisma.product.upsert({
+      where: { sku: 'BEB-003' },
+      update: {},
+      create: {
         name: 'Cerveza Quilmes 1L',
         description: 'Cerveza Quilmes Clásica 1 litro',
         sku: 'BEB-003',
@@ -114,8 +144,10 @@ async function main() {
       },
     }),
     // Alimentos
-    prisma.product.create({
-      data: {
+    prisma.product.upsert({
+      where: { sku: 'ALI-001' },
+      update: {},
+      create: {
         name: 'Arroz Gallo Oro 1kg',
         description: 'Arroz largo fino',
         sku: 'ALI-001',
@@ -129,8 +161,10 @@ async function main() {
         taxRate: 10.50,
       },
     }),
-    prisma.product.create({
-      data: {
+    prisma.product.upsert({
+      where: { sku: 'ALI-002' },
+      update: {},
+      create: {
         name: 'Aceite Cocinero 900ml',
         description: 'Aceite de girasol',
         sku: 'ALI-002',
@@ -144,8 +178,10 @@ async function main() {
         taxRate: 10.50,
       },
     }),
-    prisma.product.create({
-      data: {
+    prisma.product.upsert({
+      where: { sku: 'ALI-003' },
+      update: {},
+      create: {
         name: 'Fideos Matarazzo 500g',
         description: 'Fideos moñitos',
         sku: 'ALI-003',
@@ -160,8 +196,10 @@ async function main() {
       },
     }),
     // Limpieza
-    prisma.product.create({
-      data: {
+    prisma.product.upsert({
+      where: { sku: 'LIM-001' },
+      update: {},
+      create: {
         name: 'Lavandina Ayudín 2L',
         description: 'Lavandina concentrada',
         sku: 'LIM-001',
@@ -175,8 +213,10 @@ async function main() {
         taxRate: 21.00,
       },
     }),
-    prisma.product.create({
-      data: {
+    prisma.product.upsert({
+      where: { sku: 'LIM-002' },
+      update: {},
+      create: {
         name: 'Detergente Magistral 500ml',
         description: 'Detergente concentrado',
         sku: 'LIM-002',
@@ -191,8 +231,10 @@ async function main() {
       },
     }),
     // Higiene Personal
-    prisma.product.create({
-      data: {
+    prisma.product.upsert({
+      where: { sku: 'HIG-001' },
+      update: {},
+      create: {
         name: 'Jabón Dove 90g',
         description: 'Jabón de tocador',
         sku: 'HIG-001',
@@ -206,8 +248,10 @@ async function main() {
         taxRate: 21.00,
       },
     }),
-    prisma.product.create({
-      data: {
+    prisma.product.upsert({
+      where: { sku: 'HIG-002' },
+      update: {},
+      create: {
         name: 'Shampoo Sedal 350ml',
         description: 'Shampoo hidratación instantánea',
         sku: 'HIG-002',

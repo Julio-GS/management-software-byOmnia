@@ -1,17 +1,36 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { PrismaService } from '../database/prisma.service';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { EventBus } from '@nestjs/cqrs';
 import { CreateMovementDto } from './dto/create-movement.dto';
 import { StockAdjustmentDto } from './dto/stock-adjustment.dto';
+import { MovementType } from './entities/inventory-movement.entity';
+import { InventoryRepository } from './repositories/inventory.repository';
+import { InventoryMovementEvent } from '../shared/events';
 
+/**
+ * InventoryService
+ * 
+ * Implements business logic for inventory management.
+ * Uses repository pattern for data access and EventBus for cross-module communication.
+ */
 @Injectable()
 export class InventoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(InventoryService.name);
 
+  constructor(
+    private readonly repository: InventoryRepository,
+    private readonly eventBus: EventBus,
+  ) {}
+
+  /**
+   * Create a new inventory movement.
+   * Calculates new stock based on movement type and updates product stock atomically.
+   * Emits InventoryMovementEvent for other modules to react.
+   * @throws NotFoundException if product not found
+   * @throws BadRequestException for invalid movement type
+   */
   async createMovement(createMovementDto: CreateMovementDto) {
-    // Verify product exists
-    const product = await this.prisma.product.findUnique({
-      where: { id: createMovementDto.productId },
-    });
+    // Verify product exists and get current stock
+    const product = await this.repository.findProductById(createMovementDto.productId);
 
     if (!product) {
       throw new NotFoundException(`Product with ID ${createMovementDto.productId} not found`);
@@ -22,145 +41,129 @@ export class InventoryService {
     let newStock = previousStock;
 
     switch (createMovementDto.type) {
-      case 'in':
-        newStock = previousStock + createMovementDto.quantity;
+      case 'ENTRY':
+        newStock = previousStock + Math.abs(createMovementDto.quantity);
         break;
-      case 'out':
-        newStock = previousStock - createMovementDto.quantity;
+      case 'EXIT':
+        newStock = previousStock - Math.abs(createMovementDto.quantity);
+        // ALLOW negative stock (offline scenarios where sync lag causes temporary negative stock)
         if (newStock < 0) {
-          throw new BadRequestException('Insufficient stock for OUT movement');
+          this.logger.warn(
+            `Stock for product ${createMovementDto.productId} went negative: ${newStock}`,
+          );
         }
         break;
-      case 'adjustment':
-      case 'transfer':
+      case 'ADJUSTMENT':
+        // For adjustments, quantity can be positive or negative
         newStock = previousStock + createMovementDto.quantity;
         break;
       default:
         throw new BadRequestException(`Invalid movement type: ${createMovementDto.type}`);
     }
 
-    // Use transaction to update stock and create movement record atomically
-    return this.prisma.$transaction(async (prisma) => {
-      // Update product stock
-      await prisma.product.update({
-        where: { id: createMovementDto.productId },
-        data: { stock: newStock },
-      });
+    // Create movement using repository (handles transaction)
+    const movement = await this.repository.createMovement(
+      createMovementDto,
+      previousStock,
+      newStock,
+    );
 
-      // Create movement record
-      const movement = await prisma.inventoryMovement.create({
-        data: {
-          productId: createMovementDto.productId,
-          type: createMovementDto.type,
-          quantity: createMovementDto.quantity,
-          previousStock,
-          newStock,
-          reason: createMovementDto.reason,
-          reference: createMovementDto.reference,
-          notes: createMovementDto.notes,
-          userId: createMovementDto.userId,
-          deviceId: createMovementDto.deviceId,
-        },
-        include: {
-          product: true,
-        },
-      });
+    // Emit event for sync module and other interested parties
+    this.eventBus.publish(
+      new InventoryMovementEvent(
+        movement.productId,
+        movement.quantity,
+        this.mapMovementTypeToEventType(movement.type),
+        movement.reason,
+        movement.newStock,
+      ),
+    );
 
-      return movement;
-    });
+    return movement.toJSON();
   }
 
-  async getProductHistory(productId: string, limit?: number) {
-    // Verify product exists
-    const product = await this.prisma.product.findUnique({
-      where: { id: productId },
-    });
-
-    if (!product) {
-      throw new NotFoundException(`Product with ID ${productId} not found`);
-    }
-
-    return this.prisma.inventoryMovement.findMany({
-      where: { productId },
-      include: {
-        product: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: limit,
-    });
-  }
-
+  /**
+   * Adjust stock to a specific value.
+   * Creates an ADJUSTMENT movement with the difference.
+   * Emits InventoryMovementEvent for other modules to react.
+   * @throws NotFoundException if product not found
+   */
   async adjustStock(adjustmentDto: StockAdjustmentDto) {
-    // Verify product exists
-    const product = await this.prisma.product.findUnique({
-      where: { id: adjustmentDto.productId },
-    });
+    // Verify product exists and get current stock
+    const product = await this.repository.findProductById(adjustmentDto.productId);
 
     if (!product) {
       throw new NotFoundException(`Product with ID ${adjustmentDto.productId} not found`);
     }
 
+    const previousStock = product.stock;
+
+    // Allow negative stock (offline scenarios)
     if (adjustmentDto.newStock < 0) {
-      throw new BadRequestException('Stock cannot be negative');
+      this.logger.warn(
+        `Stock adjustment for product ${adjustmentDto.productId} resulted in negative stock: ${adjustmentDto.newStock}`,
+      );
     }
 
-    const previousStock = product.stock;
-    const difference = adjustmentDto.newStock - previousStock;
+    // Create adjustment using repository (handles transaction)
+    const movement = await this.repository.adjustStock(adjustmentDto, previousStock);
 
-    // Use transaction to update stock and create movement record
-    return this.prisma.$transaction(async (prisma) => {
-      // Update product stock
-      await prisma.product.update({
-        where: { id: adjustmentDto.productId },
-        data: { stock: adjustmentDto.newStock },
-      });
+    // Emit event for sync module
+    this.eventBus.publish(
+      new InventoryMovementEvent(
+        movement.productId,
+        movement.quantity,
+        'ADJUSTMENT',
+        movement.reason,
+        movement.newStock,
+      ),
+    );
 
-      // Create adjustment movement record
-      const movement = await prisma.inventoryMovement.create({
-        data: {
-          productId: adjustmentDto.productId,
-          type: 'adjustment',
-          quantity: difference,
-          previousStock,
-          newStock: adjustmentDto.newStock,
-          reason: adjustmentDto.reason,
-        },
-        include: {
-          product: true,
-        },
-      });
-
-      return movement;
-    });
+    return movement.toJSON();
   }
 
-  async getAllMovements(params?: { type?: string; startDate?: Date; endDate?: Date }) {
-    const where: any = {};
+  /**
+   * Get movement history for a specific product.
+   * @throws NotFoundException if product not found
+   */
+  async getProductHistory(productId: string, limit?: number) {
+    // Verify product exists (repository throws if not found)
+    const product = await this.repository.findProductById(productId);
 
-    if (params?.type) {
-      where.type = params.type;
+    if (!product) {
+      throw new NotFoundException(`Product with ID ${productId} not found`);
     }
 
-    if (params?.startDate || params?.endDate) {
-      where.createdAt = {};
-      if (params.startDate) {
-        where.createdAt.gte = params.startDate;
-      }
-      if (params.endDate) {
-        where.createdAt.lte = params.endDate;
-      }
-    }
+    const movements = await this.repository.getProductHistory(productId, limit);
+    return movements.map((m) => m.toJSON());
+  }
 
-    return this.prisma.inventoryMovement.findMany({
-      where,
-      include: {
-        product: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+  /**
+   * Get all movements with optional filters.
+   */
+  async getAllMovements(params?: {
+    type?: MovementType;
+    startDate?: Date;
+    endDate?: Date;
+    productId?: string;
+  }) {
+    const movements = await this.repository.getAllMovements(params);
+    return movements.map((m) => m.toJSON());
+  }
+
+  /**
+   * Map MovementType to event type string.
+   */
+  private mapMovementTypeToEventType(type: MovementType): 'IN' | 'OUT' | 'ADJUSTMENT' {
+    switch (type) {
+      case 'ENTRY':
+        return 'IN';
+      case 'EXIT':
+        return 'OUT';
+      case 'ADJUSTMENT':
+        return 'ADJUSTMENT';
+      default:
+        return 'ADJUSTMENT';
+    }
   }
 }

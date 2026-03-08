@@ -1,197 +1,179 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import { PrismaService } from '../database/prisma.service';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { EventBus } from '@nestjs/cqrs';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { ProductsRepository } from './repositories/products.repository';
+import {
+  ProductCreatedEvent,
+  ProductUpdatedEvent,
+  ProductDeletedEvent,
+} from '../shared/events';
 
+/**
+ * ProductsService
+ * 
+ * Implements business logic for product management.
+ * Uses repository pattern for data access and EventBus for cross-module communication.
+ */
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly repository: ProductsRepository,
+    private readonly eventBus: EventBus,
+  ) {}
 
+  /**
+   * Create a new product.
+   * Emits ProductCreatedEvent for other modules to react.
+   */
   async create(createProductDto: CreateProductDto) {
-    // Check if SKU already exists
-    const existingSku = await this.prisma.product.findUnique({
-      where: { sku: createProductDto.sku },
-    });
-    if (existingSku) {
-      throw new ConflictException(`Product with SKU ${createProductDto.sku} already exists`);
-    }
+    // Repository handles uniqueness validation
+    const product = await this.repository.create(createProductDto);
 
-    // Check if barcode already exists (if provided)
-    if (createProductDto.barcode) {
-      const existingBarcode = await this.prisma.product.findUnique({
-        where: { barcode: createProductDto.barcode },
-      });
-      if (existingBarcode) {
-        throw new ConflictException(`Product with barcode ${createProductDto.barcode} already exists`);
-      }
-    }
+    // Emit event for sync module and other interested parties
+    this.eventBus.publish(
+      new ProductCreatedEvent(
+        product.id,
+        product.name,
+        product.sku,
+        product.barcode,
+        product.categoryId,
+        product.price,
+      ),
+    );
 
-    return this.prisma.product.create({
-      data: createProductDto,
-      include: {
-        category: true,
-      },
-    });
+    return product.toJSON();
   }
 
+  /**
+   * Find all products with optional filters.
+   */
   async findAll(params?: { categoryId?: string; isActive?: boolean; search?: string }) {
-    const where: any = {};
-
-    if (params?.categoryId) {
-      where.categoryId = params.categoryId;
-    }
-
-    if (params?.isActive !== undefined) {
-      where.isActive = params.isActive;
-    }
-
-    if (params?.search) {
-      where.OR = [
-        { name: { contains: params.search, mode: 'insensitive' } },
-        { description: { contains: params.search, mode: 'insensitive' } },
-        { sku: { contains: params.search, mode: 'insensitive' } },
-        { barcode: { contains: params.search, mode: 'insensitive' } },
-      ];
-    }
-
-    return this.prisma.product.findMany({
-      where,
-      include: {
-        category: true,
-      },
-      orderBy: {
-        name: 'asc',
-      },
-    });
+    const products = await this.repository.findAll(params);
+    return products.map((p) => p.toJSON());
   }
 
+  /**
+   * Find a single product by ID.
+   * @throws NotFoundException if product not found
+   */
   async findOne(id: string) {
-    const product = await this.prisma.product.findUnique({
-      where: { id },
-      include: {
-        category: true,
-      },
-    });
+    const product = await this.repository.findById(id);
 
     if (!product) {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
 
-    return product;
+    return product.toJSON();
   }
 
+  /**
+   * Find a product by SKU.
+   * @throws NotFoundException if product not found
+   */
   async findBySku(sku: string) {
-    const product = await this.prisma.product.findUnique({
-      where: { sku },
-      include: {
-        category: true,
-      },
-    });
+    const product = await this.repository.findBySku(sku);
 
     if (!product) {
       throw new NotFoundException(`Product with SKU ${sku} not found`);
     }
 
-    return product;
+    return product.toJSON();
   }
 
+  /**
+   * Find a product by barcode.
+   * @throws NotFoundException if product not found
+   */
   async findByBarcode(barcode: string) {
-    const product = await this.prisma.product.findUnique({
-      where: { barcode },
-      include: {
-        category: true,
-      },
-    });
+    const product = await this.repository.findByBarcode(barcode);
 
     if (!product) {
       throw new NotFoundException(`Product with barcode ${barcode} not found`);
     }
 
-    return product;
+    return product.toJSON();
   }
 
+  /**
+   * Update a product.
+   * Emits ProductUpdatedEvent for other modules to react.
+   * @throws NotFoundException if product not found
+   * @throws ConflictException if SKU or barcode conflicts
+   */
   async update(id: string, updateProductDto: UpdateProductDto) {
-    // Check if product exists
-    await this.findOne(id);
+    // Repository handles validation and uniqueness checks
+    const product = await this.repository.update(id, updateProductDto);
 
-    // Check SKU uniqueness if updating SKU
-    if (updateProductDto.sku) {
-      const existingSku = await this.prisma.product.findUnique({
-        where: { sku: updateProductDto.sku },
-      });
-      if (existingSku && existingSku.id !== id) {
-        throw new ConflictException(`Product with SKU ${updateProductDto.sku} already exists`);
-      }
-    }
+    // Emit event for sync module
+    this.eventBus.publish(
+      new ProductUpdatedEvent(product.id, {
+        name: product.name,
+        sku: product.sku,
+        basePrice: product.price,
+      }),
+    );
 
-    // Check barcode uniqueness if updating barcode
-    if (updateProductDto.barcode) {
-      const existingBarcode = await this.prisma.product.findUnique({
-        where: { barcode: updateProductDto.barcode },
-      });
-      if (existingBarcode && existingBarcode.id !== id) {
-        throw new ConflictException(`Product with barcode ${updateProductDto.barcode} already exists`);
-      }
-    }
-
-    return this.prisma.product.update({
-      where: { id },
-      data: updateProductDto,
-      include: {
-        category: true,
-      },
-    });
+    return product.toJSON();
   }
 
+  /**
+   * Soft delete a product (deactivate).
+   * Emits ProductDeletedEvent for other modules to react.
+   * @throws NotFoundException if product not found
+   */
   async remove(id: string) {
-    // Check if product exists
-    await this.findOne(id);
+    // Repository handles soft delete
+    const product = await this.repository.softDelete(id);
 
-    // Soft delete by setting isActive to false
-    return this.prisma.product.update({
-      where: { id },
-      data: { isActive: false },
-      include: {
-        category: true,
-      },
-    });
+    // Emit event for sync module
+    this.eventBus.publish(new ProductDeletedEvent(product.id, product.sku));
+
+    return product.toJSON();
   }
 
+  /**
+   * Update product stock.
+   * Uses domain entity business logic for stock validation.
+   * @throws NotFoundException if product not found
+   * @throws ConflictException if insufficient stock
+   */
   async updateStock(id: string, quantity: number) {
-    const product = await this.findOne(id);
+    // Get product entity
+    const product = await this.repository.findById(id);
 
-    const newStock = product.stock + quantity;
-    if (newStock < 0) {
-      throw new ConflictException('Insufficient stock');
+    if (!product) {
+      throw new NotFoundException(`Product with ID ${id} not found`);
     }
 
-    return this.prisma.product.update({
-      where: { id },
-      data: { stock: newStock },
-      include: {
-        category: true,
-      },
-    });
+    // Use domain entity business logic
+    if (quantity > 0) {
+      product.addStock(quantity);
+    } else if (quantity < 0) {
+      product.removeStock(Math.abs(quantity));
+    }
+    // If quantity is 0, do nothing
+
+    // Save updated entity
+    const updatedProduct = await this.repository.save(product);
+
+    // Emit event for sync module
+    this.eventBus.publish(
+      new ProductUpdatedEvent(updatedProduct.id, {
+        name: updatedProduct.name,
+        sku: updatedProduct.sku,
+        basePrice: updatedProduct.price,
+      }),
+    );
+
+    return updatedProduct.toJSON();
   }
 
+  /**
+   * Get products with low stock.
+   */
   async getLowStockProducts() {
-    return this.prisma.product.findMany({
-      where: {
-        AND: [
-          { isActive: true },
-          {
-            stock: {
-              lte: this.prisma.product.fields.minStock,
-            },
-          },
-        ],
-      },
-      include: {
-        category: true,
-      },
-      orderBy: {
-        stock: 'asc',
-      },
-    });
+    const products = await this.repository.findLowStock();
+    return products.map((p) => p.toJSON());
   }
 }

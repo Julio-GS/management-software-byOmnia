@@ -12,6 +12,8 @@ import { AjustesView } from "@/features/settings/components/ajustes-view"
 import { Bell, ChevronRight } from "lucide-react"
 import { Badge } from "@/shared/components/ui/badge"
 import { Skeleton } from "@/shared/components/ui/skeleton"
+import { SyncStatusBadge } from "@/shared/components/layout/SyncStatusBadge"
+import { SyncQueueIndicator } from "@/shared/components/layout/SyncQueueIndicator"
 
 const viewTitles: Record<string, string> = {
   dashboard: "Dashboard",
@@ -86,6 +88,8 @@ export default function Home() {
             </span>
           </div>
           <div className="flex items-center gap-4">
+            <SyncStatusBadge />
+            <SyncQueueIndicator />
             <span className="font-mono text-xs text-muted-foreground">
               {new Date().toLocaleDateString("es-AR", {
                 weekday: "long",

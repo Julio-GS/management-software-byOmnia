@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Put,
   Query,
   HttpCode,
   HttpStatus,
@@ -15,6 +16,8 @@ import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@ne
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { UpdateMarkupDto } from '../pricing/dto/update-markup.dto';
+import { PricingService } from '../pricing/pricing.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -24,7 +27,10 @@ import { Roles } from '../auth/decorators/roles.decorator';
 @Controller('products')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(
+    private readonly productsService: ProductsService,
+    private readonly pricingService: PricingService,
+  ) {}
 
   @Post()
   @Roles('manager', 'admin')
@@ -93,6 +99,46 @@ export class ProductsController {
   @ApiResponse({ status: 409, description: 'SKU or barcode conflict' })
   update(@Param('id') id: string, @Body() updateProductDto: UpdateProductDto) {
     return this.productsService.update(id, updateProductDto);
+  }
+
+  @Put(':id/markup')
+  @Roles('manager', 'admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ 
+    summary: 'Update product markup',
+    description: 'Updates product-specific markup and triggers price recalculation. Set markup to null to inherit from category/global.',
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Product markup updated and price recalculated',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'Product markup updated and price recalculated' },
+        product: { type: 'object' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Product not found' })
+  async updateProductMarkup(
+    @Param('id') id: string,
+    @Body() updateMarkupDto: UpdateMarkupDto,
+  ) {
+    // Update the product markup
+    await this.productsService.update(id, {
+      markup: updateMarkupDto.markup,
+    });
+
+    // Trigger price recalculation for this product
+    await this.pricingService.recalculatePriceForProduct(id);
+
+    // Fetch updated product with new price
+    const updatedProduct = await this.productsService.findOne(id);
+
+    return {
+      message: 'Product markup updated and price recalculated',
+      product: updatedProduct,
+    };
   }
 
   @Patch(':id/stock')

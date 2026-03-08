@@ -5,12 +5,14 @@
   "main": "dist/electron/main.js",
   "private": true,
   "scripts": {
-    "dev": "node esbuild.config.js && cross-env NODE_ENV=development electronmon .",
+    "postinstall": "electron-rebuild -f -w better-sqlite3",
+    "dev": "node esbuild.config.js && cross-env NODE_ENV=development electron .",
     "dev:compile": "tsc --watch",
     "build:electron": "node esbuild.config.js",
     "build": "node esbuild.config.js && electron-builder",
     "build:dir": "node esbuild.config.js && electron-builder --dir",
-    "clean": "rm -rf dist release"
+    "clean": "rm -rf dist release",
+    "rebuild": "electron-rebuild -f -w better-sqlite3"
   },
   "build": {
     "appId": "com.omnia.management",
@@ -49,10 +51,17 @@
     }
   },
   "dependencies": {
+    "@omnia/local-db": "workspace:*",
+    "@omnia/shared-types": "workspace:*",
+    "axios": "^1.13.6",
+    "better-sqlite3": "^11.10.0",
+    "dotenv": "^17.3.1",
     "electron-log": "^5.1.1",
-    "electron-updater": "^6.1.8"
+    "electron-updater": "^6.1.8",
+    "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.3",
     "@types/node": "^20.11.19",
     "cross-env": "^7.0.3",
     "electron": "28.0.0",

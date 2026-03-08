@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsNumber } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -8,7 +8,7 @@ export class StockAdjustmentDto {
   @IsNotEmpty()
   productId: string;
 
-  @ApiProperty({ example: 50, description: 'New stock value to set' })
+  @ApiProperty({ example: 50, description: 'New stock value to set (can be negative for offline scenarios)' })
   @IsNumber()
   @Type(() => Number)
   newStock: number;
@@ -17,4 +17,9 @@ export class StockAdjustmentDto {
   @IsString()
   @IsNotEmpty()
   reason: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  userId?: string;
 }

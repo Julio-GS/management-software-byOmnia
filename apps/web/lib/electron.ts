@@ -85,3 +85,38 @@ export async function showMessageBox(options: any) {
   const api = getElectronAPISafe();
   return api ? await api.showMessageBox(options) : null;
 }
+
+/**
+ * Auth helpers
+ */
+export async function getElectronAuthToken(): Promise<string | null> {
+  const api = getElectronAPISafe();
+  if (!api?.auth) return null;
+
+  const result = await api.auth.getToken();
+  return result.success ? result.token! : null;
+}
+
+export async function getElectronUser(): Promise<any | null> {
+  const api = getElectronAPISafe();
+  if (!api?.auth) return null;
+
+  const result = await api.auth.getUser();
+  return result.success ? result.user : null;
+}
+
+export async function isElectronAuthenticated(): Promise<{ isAuthenticated: boolean; user: any | null; token: string | null }> {
+  const api = getElectronAPISafe();
+  if (!api?.auth) {
+    return { isAuthenticated: false, user: null, token: null };
+  }
+
+  const result = await api.auth.isAuthenticated();
+  const tokenResult = await api.auth.getToken();
+  
+  return {
+    isAuthenticated: result.success && result.isAuthenticated,
+    user: result.user || null,
+    token: tokenResult.success ? tokenResult.token || null : null,
+  };
+}

@@ -1,16 +1,22 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { 
-  isElectron, 
-  getAppVersion, 
-  getPlatform, 
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/src/shared/components/ui/card";
+import {
+  isElectron,
+  getAppVersion,
+  getPlatform,
   getUserDataPath,
-  showMessageBox 
-} from '@/lib/electron';
+  showMessageBox,
+} from "@/lib/electron";
+import { Badge } from "@/src/shared/components/ui/badge";
+import { Button } from "@/src/shared/components/ui/button";
 
 export default function DebugPage() {
   const [electronInfo, setElectronInfo] = useState<{
@@ -41,7 +47,12 @@ export default function DebugPage() {
           userDataPath,
         });
       } else {
-        setElectronInfo({ isElectron: false, version: null, platform: null, userDataPath: null });
+        setElectronInfo({
+          isElectron: false,
+          version: null,
+          platform: null,
+          userDataPath: null,
+        });
       }
     }
     loadElectronInfo();
@@ -49,19 +60,21 @@ export default function DebugPage() {
 
   const testDialog = async () => {
     const result = await showMessageBox({
-      type: 'info',
-      title: 'Test Dialog',
-      message: 'This is a test dialog from Electron!',
-      buttons: ['OK', 'Cancel'],
+      type: "info",
+      title: "Test Dialog",
+      message: "This is a test dialog from Electron!",
+      buttons: ["OK", "Cancel"],
     });
-    console.log('Dialog result:', result);
+    console.log("Dialog result:", result);
   };
 
   return (
     <div className="container mx-auto py-8 space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Electron Debug Panel</h1>
-        <p className="text-muted-foreground">Test Electron IPC bridge and APIs</p>
+        <p className="text-muted-foreground">
+          Test Electron IPC bridge and APIs
+        </p>
       </div>
 
       <Card>
@@ -72,8 +85,8 @@ export default function DebugPage() {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <span className="font-medium">Running in Electron:</span>
-            <Badge variant={electronInfo.isElectron ? 'default' : 'secondary'}>
-              {electronInfo.isElectron ? 'Yes' : 'No (Browser)'}
+            <Badge variant={electronInfo.isElectron ? "default" : "secondary"}>
+              {electronInfo.isElectron ? "Yes" : "No (Browser)"}
             </Badge>
           </div>
 

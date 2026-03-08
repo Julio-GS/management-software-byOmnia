@@ -1,13 +1,7 @@
-import { IsString, IsNotEmpty, IsNumber, Min, IsOptional, IsEnum } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsOptional, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-
-enum MovementType {
-  IN = 'in',
-  OUT = 'out',
-  ADJUSTMENT = 'adjustment',
-  TRANSFER = 'transfer',
-}
+import { MovementType } from '../entities/inventory-movement.entity';
 
 export class CreateMovementDto {
   @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440000' })
@@ -15,12 +9,12 @@ export class CreateMovementDto {
   @IsNotEmpty()
   productId: string;
 
-  @ApiProperty({ example: 'in', enum: MovementType })
+  @ApiProperty({ example: 'ENTRY', enum: MovementType })
   @IsEnum(MovementType)
   @IsNotEmpty()
-  type: string;
+  type: MovementType;
 
-  @ApiProperty({ example: 10 })
+  @ApiProperty({ example: 10, description: 'Quantity to add (positive) or subtract (negative)' })
   @IsNumber()
   @Type(() => Number)
   quantity: number;

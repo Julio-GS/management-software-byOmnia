@@ -1,5 +1,6 @@
-import { IsString, IsNotEmpty, IsOptional, IsBoolean } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsNumber, Min, Max } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 
 export class CreateCategoryDto {
   @ApiProperty({ example: 'Bebidas' })
@@ -26,6 +27,14 @@ export class CreateCategoryDto {
   @IsString()
   @IsOptional()
   icon?: string;
+
+  @ApiProperty({ example: 25, description: 'Default markup percentage for products in this category', required: false })
+  @IsNumber()
+  @Type(() => Number)
+  @Min(0)
+  @Max(1000)
+  @IsOptional()
+  defaultMarkup?: number;
 
   @ApiProperty({ default: true })
   @IsBoolean()
