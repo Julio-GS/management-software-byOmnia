@@ -615,3 +615,47 @@ ipcMain.handle('auth:isAuthenticated', async () => {
     return { success: false, isAuthenticated: false };
   }
 });
+
+// ========================================================================
+// API IPC HANDLERS
+// ========================================================================
+
+ipcMain.handle('api:get', async (_, endpoint: string) => {
+  try {
+    const response = await httpClient.get(endpoint);
+    return response.data;
+  } catch (error) {
+    log.error(`Error in API GET ${endpoint}:`, error);
+    throw error;
+  }
+});
+
+ipcMain.handle('api:post', async (_, endpoint: string, data: any) => {
+  try {
+    const response = await httpClient.post(endpoint, data);
+    return response.data;
+  } catch (error) {
+    log.error(`Error in API POST ${endpoint}:`, error);
+    throw error;
+  }
+});
+
+ipcMain.handle('api:put', async (_, endpoint: string, data: any) => {
+  try {
+    const response = await httpClient.put(endpoint, data);
+    return response.data;
+  } catch (error) {
+    log.error(`Error in API PUT ${endpoint}:`, error);
+    throw error;
+  }
+});
+
+ipcMain.handle('api:delete', async (_, endpoint: string) => {
+  try {
+    const response = await httpClient.delete(endpoint);
+    return response.data;
+  } catch (error) {
+    log.error(`Error in API DELETE ${endpoint}:`, error);
+    throw error;
+  }
+});

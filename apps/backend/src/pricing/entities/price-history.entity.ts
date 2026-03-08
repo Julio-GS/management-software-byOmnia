@@ -60,7 +60,7 @@ export class PriceHistory {
       // Convert Prisma Decimal to number
       typeof data.oldPrice === 'object' ? Number(data.oldPrice) : data.oldPrice,
       typeof data.newPrice === 'object' ? Number(data.newPrice) : data.newPrice,
-      data.changeType,
+      data.changeType as 'manual' | 'markup_change' | 'cost_change' | 'bulk_update',
       data.changedBy,
       data.reason,
       data.timestamp,

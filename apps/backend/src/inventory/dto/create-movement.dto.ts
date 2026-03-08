@@ -9,8 +9,8 @@ export class CreateMovementDto {
   @IsNotEmpty()
   productId: string;
 
-  @ApiProperty({ example: 'ENTRY', enum: MovementType })
-  @IsEnum(MovementType)
+  @ApiProperty({ example: 'ENTRY', enum: ['ENTRY', 'EXIT', 'ADJUSTMENT'] })
+  @IsEnum(['ENTRY', 'EXIT', 'ADJUSTMENT'])
   @IsNotEmpty()
   type: MovementType;
 

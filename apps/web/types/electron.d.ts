@@ -180,6 +180,9 @@ declare global {
         isAuthenticated: () => Promise<{ success: boolean; isAuthenticated: boolean; user?: any }>;
       };
 
+      // Generic IPC invoke method
+      invoke: (channel: string, ...args: any[]) => Promise<any>;
+
       // Real-time Event Listeners
       on: {
         productCreated: (callback: (product: any) => void) => void;
