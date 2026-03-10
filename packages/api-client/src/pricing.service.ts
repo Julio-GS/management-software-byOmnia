@@ -1,4 +1,4 @@
-import { ApiClient } from './client';
+import { ApiClient } from './client.js';
 import type {
   PricingStrategy,
   UpdateGlobalMarkupDto,
@@ -13,21 +13,19 @@ export class PricingService {
    * Get global markup configuration
    */
   async getGlobalMarkup(): Promise<PricingStrategy> {
-    const response = await this.client.get<PricingStrategy>(
+    return this.client.get<PricingStrategy>(
       '/pricing/global-markup'
     );
-    return response.data!;
   }
 
   /**
    * Update global markup
    */
   async updateGlobalMarkup(dto: UpdateGlobalMarkupDto): Promise<PricingStrategy> {
-    const response = await this.client.patch<PricingStrategy>(
+    return this.client.patch<PricingStrategy>(
       '/pricing/global-markup',
       dto
     );
-    return response.data!;
   }
 
   /**
@@ -36,20 +34,18 @@ export class PricingService {
   async calculatePrice(
     dto: CalculatePriceDto
   ): Promise<PriceCalculationResult> {
-    const response = await this.client.post<PriceCalculationResult>(
+    return this.client.post<PriceCalculationResult>(
       '/pricing/calculate',
       dto
     );
-    return response.data!;
   }
 
   /**
    * Get price history for a product
    */
   async getPriceHistory(productId: string): Promise<any[]> {
-    const response = await this.client.get<any[]>(
+    return this.client.get<any[]>(
       `/pricing/history/${productId}`
     );
-    return response.data!;
   }
 }

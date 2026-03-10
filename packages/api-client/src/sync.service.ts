@@ -1,4 +1,4 @@
-import { ApiClient } from './client';
+import { ApiClient } from './client.js';
 import type { SyncStatusSummary, SyncDeltaResponse } from '@omnia/shared-types';
 
 export class SyncService {
@@ -8,25 +8,22 @@ export class SyncService {
    * Trigger a full sync (upload pending changes and download updates)
    */
   async sync(): Promise<SyncDeltaResponse> {
-    const response = await this.client.post<SyncDeltaResponse>('/sync');
-    return response.data!;
+    return this.client.post<SyncDeltaResponse>('/sync');
   }
 
   /**
    * Get current sync status
    */
   async getStatus(): Promise<SyncStatusSummary> {
-    const response = await this.client.get<SyncStatusSummary>('/sync/status');
-    return response.data!;
+    return this.client.get<SyncStatusSummary>('/sync/status');
   }
 
   /**
    * Get sync history
    */
   async getHistory(limit: number = 10): Promise<any[]> {
-    const response = await this.client.get<any[]>('/sync/history', {
+    return this.client.get<any[]>('/sync/history', {
       params: { limit },
     });
-    return response.data!;
   }
 }

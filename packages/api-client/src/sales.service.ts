@@ -1,4 +1,4 @@
-import { ApiClient } from './client';
+import { ApiClient } from './client.js';
 import type {
   Sale,
   CreateSaleDto,
@@ -23,8 +23,7 @@ export class SalesService {
    * Create a new sale (POS checkout)
    */
   async create(dto: CreateSaleDto): Promise<Sale> {
-    const response = await this.client.post<Sale>('/sales', dto);
-    return response.data!;
+    return this.client.post<Sale>('/sales', dto);
   }
 
   /**
@@ -34,25 +33,22 @@ export class SalesService {
     filters?: SaleFilters,
     pagination?: PaginationParams
   ): Promise<PaginatedResponse<Sale>> {
-    const response = await this.client.get<PaginatedResponse<Sale>>('/sales', {
+    return this.client.get<PaginatedResponse<Sale>>('/sales', {
       params: { ...filters, ...pagination },
     });
-    return response.data!;
   }
 
   /**
    * Get a single sale by ID
    */
   async getById(id: string): Promise<Sale> {
-    const response = await this.client.get<Sale>(`/sales/${id}`);
-    return response.data!;
+    return this.client.get<Sale>(`/sales/${id}`);
   }
 
   /**
    * Cancel a sale
    */
   async cancel(id: string): Promise<Sale> {
-    const response = await this.client.patch<Sale>(`/sales/${id}/cancel`);
-    return response.data!;
+    return this.client.patch<Sale>(`/sales/${id}/cancel`);
   }
 }

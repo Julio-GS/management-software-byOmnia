@@ -16,19 +16,10 @@ export function PriceCalculator() {
   const [cost, setCost] = useState('');
   const [result, setResult] = useState<PriceCalculation | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
-  const { calculatePrice, isAvailable } = usePricingAPI();
+  const { calculatePrice } = usePricingAPI();
 
   const handleCalculate = async (e: FormEvent) => {
     e.preventDefault();
-    
-    if (!isAvailable) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Price calculator is only available in desktop app',
-      });
-      return;
-    }
 
     const costValue = parseFloat(cost);
     if (isNaN(costValue) || costValue <= 0) {
@@ -54,16 +45,6 @@ export function PriceCalculator() {
       setIsCalculating(false);
     }
   };
-
-  if (!isAvailable) {
-    return (
-      <div className="rounded-lg border border-border bg-muted/50 p-6 text-center">
-        <p className="text-sm text-muted-foreground">
-          Price calculator only available in desktop app
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4">
@@ -94,10 +75,9 @@ export function PriceCalculator() {
               {isCalculating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Calculate
             </Button>
-            </div>
-            </div>
           </div>
-        </form>
+        </div>
+      </form>
 
         {result && (
           <>

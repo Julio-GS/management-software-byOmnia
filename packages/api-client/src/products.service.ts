@@ -1,4 +1,4 @@
-import { ApiClient } from './client';
+import { ApiClient } from './client.js';
 import type {
   Product,
   CreateProductDto,
@@ -30,21 +30,19 @@ export class ProductsService {
     filters?: ProductFilters,
     pagination?: PaginationParams
   ): Promise<PaginatedResponse<Product>> {
-    const response = await this.client.get<PaginatedResponse<Product>>(
+    return this.client.get<PaginatedResponse<Product>>(
       '/products',
       {
         params: { ...filters, ...pagination },
       }
     );
-    return response.data!;
   }
 
   /**
    * Get a single product by ID
    */
   async getById(id: string): Promise<Product> {
-    const response = await this.client.get<Product>(`/products/${id}`);
-    return response.data!;
+    return this.client.get<Product>(`/products/${id}`);
   }
 
   /**
@@ -52,10 +50,9 @@ export class ProductsService {
    */
   async getByBarcode(barcode: string): Promise<Product | null> {
     try {
-      const response = await this.client.get<Product>(
+      return await this.client.get<Product>(
         `/products/barcode/${barcode}`
       );
-      return response.data || null;
     } catch (error: any) {
       // Return null if not found (404)
       if (error.response?.status === 404) {
@@ -69,16 +66,14 @@ export class ProductsService {
    * Create a new product
    */
   async create(dto: CreateProductDto): Promise<Product> {
-    const response = await this.client.post<Product>('/products', dto);
-    return response.data!;
+    return this.client.post<Product>('/products', dto);
   }
 
   /**
    * Update an existing product
    */
   async update(id: string, dto: UpdateProductDto): Promise<Product> {
-    const response = await this.client.patch<Product>(`/products/${id}`, dto);
-    return response.data!;
+    return this.client.patch<Product>(`/products/${id}`, dto);
   }
 
   /**
@@ -92,9 +87,8 @@ export class ProductsService {
    * Get products with low stock
    */
   async getLowStock(threshold?: number): Promise<Product[]> {
-    const response = await this.client.get<Product[]>('/products/low-stock', {
+    return this.client.get<Product[]>('/products/low-stock', {
       params: { threshold },
     });
-    return response.data!;
   }
 }

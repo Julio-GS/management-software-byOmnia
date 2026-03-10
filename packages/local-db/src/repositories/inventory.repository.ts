@@ -1,5 +1,6 @@
 import { Database } from 'better-sqlite3';
 import { BaseRepository } from './base.repository';
+import { generateUUID } from '../utils/converters';
 import type {
   InventoryMovement,
   CreateInventoryMovementDTO,
@@ -13,6 +14,72 @@ export class InventoryRepository extends BaseRepository<
 > {
   constructor(db: Database) {
     super(db, 'inventory_movements');
+  }
+
+  /**
+   * Override create to handle snake_case field mapping for inventory movements
+   */
+  public override create(data: CreateInventoryMovementDTO): InventoryMovement {
+    try {
+      const id = generateUUID();
+      const now = new Date().toISOString();
+      
+      // Map camelCase DTO to snake_case database columns
+      const insertData = {
+        id,
+        product_id: data.productId,
+        type: data.type,
+        quantity: data.quantity,
+        previous_stock: data.previous_stock ?? 0,
+        new_stock: data.new_stock ?? 0,
+        reason: data.reason ?? null,
+        reference: data.reference ?? null,
+        notes: data.notes ?? null,
+        user_id: data.userId ?? null,
+        device_id: data.device_id ?? null,
+        is_dirty: 1,
+        version: 1,
+        is_deleted: 0,
+        created_at: now,
+        updated_at: now,
+      };
+
+      const stmt = this.db.prepare(`
+        INSERT INTO ${this.tableName} (
+          id, product_id, type, quantity, previous_stock, new_stock,
+          reason, reference, notes, user_id, device_id,
+          is_dirty, version, is_deleted, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      stmt.run(
+        insertData.id,
+        insertData.product_id,
+        insertData.type,
+        insertData.quantity,
+        insertData.previous_stock,
+        insertData.new_stock,
+        insertData.reason,
+        insertData.reference,
+        insertData.notes,
+        insertData.user_id,
+        insertData.device_id,
+        insertData.is_dirty,
+        insertData.version,
+        insertData.is_deleted,
+        insertData.created_at,
+        insertData.updated_at
+      );
+
+      const created = this.findById(id);
+      if (!created) {
+        throw new Error(`Failed to retrieve created ${this.tableName}`);
+      }
+
+      return created;
+    } catch (error) {
+      throw new Error(`Failed to create ${this.tableName}: ${(error as Error).message}`);
+    }
   }
 
   /**

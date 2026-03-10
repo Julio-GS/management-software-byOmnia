@@ -33,19 +33,10 @@ export function InventoryMovementForm({
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const { createMovement, isAvailable } = useInventoryAPI();
+  const { createMovement } = useInventoryAPI();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-
-    if (!isAvailable) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Inventory API is only available in desktop app',
-      });
-      return;
-    }
 
     const qty = parseFloat(quantity);
     if (isNaN(qty) || qty === 0) {
@@ -101,17 +92,6 @@ export function InventoryMovementForm({
         return <Settings2 className="h-5 w-5 text-blue-600" />;
     }
   };
-
-  if (!isAvailable) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Inventory Movement</CardTitle>
-          <CardDescription>Feature only available in desktop app</CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -205,20 +185,10 @@ export function InventoryMovementForm({
             />
           </div>
 
-        <Button type="submit" disabled={isSubmitting} className="w-full">
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Create Movement
-        </Button>
-      </form>
-    );
-  }
-
-  if (!isAvailable) {
-    return (
-      <div className="rounded-lg border border-border bg-muted/50 p-6 text-center">
-        <p className="text-sm text-muted-foreground">
-          Inventory movement feature only available in desktop app
-        </p>
-      </div>
-    );
-  }
+      <Button type="submit" disabled={isSubmitting} className="w-full">
+        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        Create Movement
+      </Button>
+    </form>
+  );
+}

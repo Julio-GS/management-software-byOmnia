@@ -1,4 +1,4 @@
-import { httpClient } from '../api/http-client';
+import { apiClient } from '../api/api-client-instance';
 import { getLogger } from '../utils/logger';
 import { dbManager } from '../database/db-manager';
 import { wsClient } from './websocket-client';
@@ -10,7 +10,7 @@ const logger = getLogger();
  * Sync service for background data synchronization
  * 
  * Automatically syncs local database changes with the backend
- * Handles 401 errors transparently through httpClient
+ * Handles 401 errors transparently through apiClient
  * Integrates WebSocket for real-time sync and offline queue management
  */
 class SyncService {
@@ -84,8 +84,8 @@ class SyncService {
       logger.info(`Syncing ${dirtyProducts.length} products, ${dirtyCategories.length} categories`);
 
       // Push changes to backend
-      // The httpClient will automatically handle 401 and retry
-      const syncResult = await httpClient.post('/api/v1/sync/logs', {
+      // The apiClient will automatically handle 401 and retry
+      const syncResult = await apiClient.getClient().post('/api/v1/sync/logs', {
         products: dirtyProducts,
         categories: dirtyCategories,
       });
@@ -158,7 +158,7 @@ class SyncService {
       const lastSync = this.getLastSyncTimestamp();
 
       // Fetch updates from backend
-      const updates = await httpClient.get(`/api/v1/sync/logs?since=${lastSync}`);
+      const updates = await apiClient.getClient().get(`/api/v1/sync/logs?since=${lastSync}`) as any;
 
       logger.info(`Received ${updates.products?.length || 0} product updates`);
 
@@ -257,14 +257,15 @@ class SyncService {
       }
 
       // Send to backend
+      const client = apiClient.getClient();
       if (method === 'GET') {
-        await httpClient.get(endpoint);
+        await client.get(endpoint);
       } else if (method === 'POST') {
-        await httpClient.post(endpoint, payload);
+        await client.post(endpoint, payload);
       } else if (method === 'PATCH') {
-        await httpClient.patch(endpoint, payload);
+        await client.patch(endpoint, payload);
       } else if (method === 'DELETE') {
-        await httpClient.delete(endpoint);
+        await client.delete(endpoint);
       }
 
       // Mark as synced

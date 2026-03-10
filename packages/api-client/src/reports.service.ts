@@ -1,4 +1,4 @@
-import { ApiClient } from './client';
+import { ApiClient } from './client.js';
 import type { SalesSummaryRequest, SalesSummaryResponse } from '@omnia/shared-types';
 
 export class ReportsService {
@@ -8,13 +8,12 @@ export class ReportsService {
    * Get sales report for a date range
    */
   async getSalesReport(params: SalesSummaryRequest): Promise<SalesSummaryResponse> {
-    const response = await this.client.get<SalesSummaryResponse>(
+    return this.client.get<SalesSummaryResponse>(
       '/reports/sales',
       {
         params,
       }
     );
-    return response.data!;
   }
 
   /**
@@ -25,10 +24,9 @@ export class ReportsService {
     endDate: string,
     limit: number = 10
   ): Promise<any[]> {
-    const response = await this.client.get<any[]>('/reports/top-products', {
+    return this.client.get<any[]>('/reports/top-products', {
       params: { startDate, endDate, limit },
     });
-    return response.data!;
   }
 
   /**
@@ -38,12 +36,11 @@ export class ReportsService {
     startDate: string,
     endDate: string
   ): Promise<any[]> {
-    const response = await this.client.get<any[]>(
+    return this.client.get<any[]>(
       '/reports/revenue-by-category',
       {
         params: { startDate, endDate },
       }
     );
-    return response.data!;
   }
 }

@@ -162,8 +162,13 @@ export interface CreateInventoryMovementDTO {
   productId: string;
   type: string;
   quantity: number;
+  previous_stock?: number;
+  new_stock?: number;
   reason?: string;
+  reference?: string;
+  notes?: string;
   userId?: string;
+  device_id?: string;
 }
 
 export interface UpdateInventoryMovementDTO {

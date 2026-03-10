@@ -4,13 +4,53 @@ import { getUserDataPath } from './utils/paths';
 import { dbManager } from './database/db-manager';
 import { syncService } from './sync/sync-service';
 import { wsClient } from './sync/websocket-client';
-import { httpClient } from './api/http-client';
+import { apiClient } from './api/api-client-instance';
 import { authService } from './auth/auth-service';
-import { generateUUID } from '@omnia/local-db';
+import { 
+  generateUUID,
+  ProductsRepository,
+  CategoriesRepository,
+  InventoryRepository,
+  SettingsRepository,
+} from '@omnia/local-db';
 import fs from 'fs';
 import path from 'path';
 
 const log = getLogger();
+
+// ========================================================================
+// LAZY REPOSITORY INITIALIZATION
+// ========================================================================
+// We create repositories on-demand to avoid calling dbManager.getDatabase()
+// before the database is initialized in main.ts
+
+function getProductRepo(): ProductsRepository {
+  if (!dbManager.isInitialized()) {
+    throw new Error('Database not initialized');
+  }
+  return new ProductsRepository(dbManager.getDatabase());
+}
+
+function getCategoryRepo(): CategoriesRepository {
+  if (!dbManager.isInitialized()) {
+    throw new Error('Database not initialized');
+  }
+  return new CategoriesRepository(dbManager.getDatabase());
+}
+
+function getInventoryRepo(): InventoryRepository {
+  if (!dbManager.isInitialized()) {
+    throw new Error('Database not initialized');
+  }
+  return new InventoryRepository(dbManager.getDatabase());
+}
+
+function getSettingsRepo(): SettingsRepository {
+  if (!dbManager.isInitialized()) {
+    throw new Error('Database not initialized');
+  }
+  return new SettingsRepository(dbManager.getDatabase());
+}
 
 /**
  * Register all IPC handlers
@@ -77,11 +117,7 @@ export function registerIpcHandlers(): void {
     try {
       // If online, use backend pricing service
       if (syncService.getOnlineStatus()) {
-        const result = await httpClient.post('/api/pricing/calculate', {
-          cost,
-          productId,
-          categoryId,
-        });
+        const result = await apiClient.pricing.calculatePrice({ cost, productId, categoryId });
         return { success: true, data: result };
       }
 
@@ -110,27 +146,12 @@ export function registerIpcHandlers(): void {
    */
   ipcMain.handle('pricing:updateGlobalMarkup', async (_, { percentage }) => {
     try {
-      const db = dbManager.getDatabase();
-
-      // Update or insert global markup setting
-      const existing = db.prepare("SELECT id FROM settings WHERE key = 'globalMarkup'").get() as any;
-
-      if (existing) {
-        db.prepare("UPDATE settings SET value = ?, updated_at = ? WHERE key = 'globalMarkup'").run(
-          percentage.toString(),
-          new Date().toISOString()
-        );
-      } else {
-        db.prepare("INSERT INTO settings (id, key, value, updated_at) VALUES (?, 'globalMarkup', ?, ?)").run(
-          generateUUID(),
-          percentage.toString(),
-          new Date().toISOString()
-        );
-      }
+      // Offline: Update local setting using SettingsRepository
+      getSettingsRepo().set('globalMarkup', percentage.toString());
 
       // If online, sync to backend
       if (syncService.getOnlineStatus()) {
-        await httpClient.post('/api/pricing/global-markup', { percentage });
+        await apiClient.pricing.updateGlobalMarkup({ markup: percentage });
       } else {
         // Queue for sync when online
         syncService.queueChange('product', 'global-markup', 'update', { percentage });
@@ -149,30 +170,24 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('pricing:recalculateCategory', async (_, { categoryId }) => {
     try {
       if (syncService.getOnlineStatus()) {
-        const result = await httpClient.post(`/api/pricing/recalculate/category/${categoryId}`);
-        return { success: true, data: result };
+        // Use direct client call since this method isn't in pricing service yet
+        const result = await apiClient.getClient().post(`/pricing/recalculate/category/${categoryId}`);
+        return { success: true, data: result.data };
       }
 
-      // Offline: Recalculate locally
-      const db = dbManager.getDatabase();
-      const products = db
-        .prepare(`
-          SELECT id, cost FROM products
-          WHERE category_id = ? AND markup IS NULL AND deleted_at IS NULL
-        `)
-        .all(categoryId) as any[];
+      // Offline: Recalculate locally using repository
+      const products = getProductRepo().findByCategory(categoryId);
 
       let updated = 0;
       for (const product of products) {
+        // Skip products with custom markup
+        if (product.markup != null) continue;
+        
         const markup = await getApplicableMarkupLocal(product.id, categoryId);
-        const calculatedPrice = Number(product.cost) * (1 + markup.percentage / 100);
+        const calculatedPrice = Number(product.cost || 0) * (1 + markup.percentage / 100);
         const suggestedPrice = suggestRoundedPrice(calculatedPrice);
 
-        db.prepare('UPDATE products SET price = ?, updated_at = ? WHERE id = ?').run(
-          suggestedPrice.toString(),
-          new Date().toISOString(),
-          product.id
-        );
+        getProductRepo().update(product.id, { price: suggestedPrice.toString() });
         updated++;
       }
 
@@ -192,10 +207,8 @@ export function registerIpcHandlers(): void {
    */
   ipcMain.handle('inventory:createMovement', async (_, { productId, type, quantity, reason, reference, notes, userId }) => {
     try {
-      const db = dbManager.getDatabase();
-
       // Get current product stock
-      const product = db.prepare('SELECT stock FROM products WHERE id = ?').get(productId) as any;
+      const product = getProductRepo().findById(productId);
       if (!product) {
         return { success: false, error: 'Product not found' };
       }
@@ -218,40 +231,25 @@ export function registerIpcHandlers(): void {
           return { success: false, error: `Invalid movement type: ${type}` };
       }
 
-      const movementId = generateUUID();
-      const now = new Date().toISOString();
-
-      // Create movement record
-      db.prepare(`
-        INSERT INTO inventory_movements (
-          id, product_id, type, quantity, previous_stock, new_stock,
-          reason, reference, notes, user_id, is_dirty, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-      `).run(
-        movementId,
+      // Create movement record using InventoryRepository
+      const movement = getInventoryRepo().create({
         productId,
         type,
         quantity,
-        previousStock,
-        newStock,
-        reason || null,
-        reference || null,
-        notes || null,
-        userId || null,
-        now,
-        now
-      );
+        previous_stock: previousStock,
+        new_stock: newStock,
+        reason,
+        reference,
+        notes,
+        userId,
+      });
 
-      // Update product stock
-      db.prepare('UPDATE products SET stock = ?, updated_at = ? WHERE id = ?').run(
-        newStock,
-        now,
-        productId
-      );
+      // Update product stock using repository
+      getProductRepo().update(productId, { stock: newStock });
 
       // If online, sync to backend
       if (syncService.getOnlineStatus()) {
-        await httpClient.post('/api/inventory/movements', {
+        await apiClient.getClient().post('/inventory/movement', {
           productId,
           type,
           quantity,
@@ -262,7 +260,7 @@ export function registerIpcHandlers(): void {
         });
       } else {
         // Queue for sync when online
-        syncService.queueChange('inventory', movementId, 'create', {
+        syncService.queueChange('inventory', movement.id, 'create', {
           productId,
           type,
           quantity,
@@ -278,7 +276,7 @@ export function registerIpcHandlers(): void {
       return {
         success: true,
         data: {
-          id: movementId,
+          id: movement.id,
           productId,
           type,
           quantity,
@@ -288,7 +286,7 @@ export function registerIpcHandlers(): void {
           reference,
           notes,
           userId,
-          createdAt: now,
+          createdAt: movement.created_at,
         },
       };
     } catch (error) {
@@ -302,20 +300,14 @@ export function registerIpcHandlers(): void {
    */
   ipcMain.handle('inventory:getMovements', async (_, { productId, type, limit = 50 }) => {
     try {
-      const db = dbManager.getDatabase();
-
-      let query = 'SELECT * FROM inventory_movements WHERE product_id = ?';
-      const params: any[] = [productId];
-
+      let movements;
+      
       if (type) {
-        query += ' AND type = ?';
-        params.push(type);
+        // Filter by type if specified
+        movements = getInventoryRepo().findByProductId(productId, limit).filter(m => m.type === type);
+      } else {
+        movements = getInventoryRepo().findByProductId(productId, limit);
       }
-
-      query += ' ORDER BY created_at DESC LIMIT ?';
-      params.push(limit);
-
-      const movements = db.prepare(query).all(...params);
 
       return { success: true, data: movements };
     } catch (error) {
@@ -333,18 +325,12 @@ export function registerIpcHandlers(): void {
    */
   ipcMain.handle('category:updateMarkup', async (_, { categoryId, markup }) => {
     try {
-      const db = dbManager.getDatabase();
-      const now = new Date().toISOString();
-
-      db.prepare('UPDATE categories SET default_markup = ?, updated_at = ? WHERE id = ?').run(
-        markup,
-        now,
-        categoryId
-      );
+      // Update category using repository
+      getCategoryRepo().update(categoryId, { default_markup: markup });
 
       // If online, sync to backend and trigger price recalculation
       if (syncService.getOnlineStatus()) {
-        await httpClient.patch(`/api/categories/${categoryId}`, { defaultMarkup: markup });
+        await apiClient.categories.update(categoryId, { defaultMarkup: markup });
         // Backend will automatically trigger price recalculation and emit WebSocket events
       } else {
         // Queue for sync when online
@@ -367,36 +353,26 @@ export function registerIpcHandlers(): void {
    */
   ipcMain.handle('product:updateMarkup', async (_, { productId, markup }) => {
     try {
-      const db = dbManager.getDatabase();
-      const now = new Date().toISOString();
-
       // Get product to recalculate price
-      const product = db.prepare('SELECT cost, category_id FROM products WHERE id = ?').get(productId) as any;
+      const product = getProductRepo().findById(productId);
       if (!product) {
         return { success: false, error: 'Product not found' };
       }
 
-      // Update markup
-      db.prepare('UPDATE products SET markup = ?, updated_at = ? WHERE id = ?').run(
-        markup,
-        now,
-        productId
-      );
+      // Update markup using repository
+      getProductRepo().update(productId, { markup });
 
       // Recalculate price
-      const markupData = await getApplicableMarkupLocal(productId, product.category_id);
-      const calculatedPrice = Number(product.cost) * (1 + markupData.percentage / 100);
+      const markupData = await getApplicableMarkupLocal(productId, product.category_id || undefined);
+      const calculatedPrice = Number(product.cost || 0) * (1 + markupData.percentage / 100);
       const suggestedPrice = suggestRoundedPrice(calculatedPrice);
 
-      db.prepare('UPDATE products SET price = ?, updated_at = ? WHERE id = ?').run(
-        suggestedPrice.toString(),
-        now,
-        productId
-      );
+      // Update price using repository
+      getProductRepo().update(productId, { price: suggestedPrice.toString() });
 
       // If online, sync to backend
       if (syncService.getOnlineStatus()) {
-        await httpClient.patch(`/api/products/${productId}`, { markup });
+        await apiClient.products.update(productId, { markup });
       } else {
         // Queue for sync when online
         syncService.queueChange('product', productId, 'update', { markup });
@@ -414,10 +390,7 @@ export function registerIpcHandlers(): void {
    */
   ipcMain.handle('product:searchByBarcode', async (_, { barcode }) => {
     try {
-      const db = dbManager.getDatabase();
-      const product = db
-        .prepare('SELECT * FROM products WHERE barcode = ? AND deleted_at IS NULL')
-        .get(barcode);
+      const product = getProductRepo().findByBarcode(barcode);
 
       if (!product) {
         return { success: false, error: 'Product not found' };
@@ -498,13 +471,9 @@ async function getApplicableMarkupLocal(
   productId?: string,
   categoryId?: string
 ): Promise<{ percentage: number; source: 'product' | 'category' | 'global' }> {
-  const db = dbManager.getDatabase();
-
   // 1. Try product-level markup
   if (productId) {
-    const product = db
-      .prepare('SELECT markup, category_id FROM products WHERE id = ?')
-      .get(productId) as any;
+    const product = getProductRepo().findById(productId);
 
     if (product?.markup) {
       return {
@@ -521,9 +490,7 @@ async function getApplicableMarkupLocal(
 
   // 2. Try category-level markup
   if (categoryId) {
-    const category = db
-      .prepare('SELECT default_markup FROM categories WHERE id = ?')
-      .get(categoryId) as any;
+    const category = getCategoryRepo().findById(categoryId);
 
     if (category?.default_markup) {
       return {
@@ -548,13 +515,10 @@ function getGlobalMarkupLocal(): number {
   const DEFAULT_GLOBAL_MARKUP = 30;
 
   try {
-    const db = dbManager.getDatabase();
-    const setting = db
-      .prepare("SELECT value FROM settings WHERE key = 'globalMarkup'")
-      .get() as any;
+    const value = getSettingsRepo().getValue<string>('globalMarkup');
 
-    if (setting?.value) {
-      return Number(setting.value);
+    if (value) {
+      return Number(value);
     }
 
     return DEFAULT_GLOBAL_MARKUP;
@@ -622,7 +586,7 @@ ipcMain.handle('auth:isAuthenticated', async () => {
 
 ipcMain.handle('api:get', async (_, endpoint: string) => {
   try {
-    const response = await httpClient.get(endpoint);
+    const response = await apiClient.getClient().get(endpoint);
     return response.data;
   } catch (error) {
     log.error(`Error in API GET ${endpoint}:`, error);
@@ -632,7 +596,7 @@ ipcMain.handle('api:get', async (_, endpoint: string) => {
 
 ipcMain.handle('api:post', async (_, endpoint: string, data: any) => {
   try {
-    const response = await httpClient.post(endpoint, data);
+    const response = await apiClient.getClient().post(endpoint, data);
     return response.data;
   } catch (error) {
     log.error(`Error in API POST ${endpoint}:`, error);
@@ -642,7 +606,7 @@ ipcMain.handle('api:post', async (_, endpoint: string, data: any) => {
 
 ipcMain.handle('api:put', async (_, endpoint: string, data: any) => {
   try {
-    const response = await httpClient.put(endpoint, data);
+    const response = await apiClient.getClient().put(endpoint, data);
     return response.data;
   } catch (error) {
     log.error(`Error in API PUT ${endpoint}:`, error);
@@ -652,7 +616,7 @@ ipcMain.handle('api:put', async (_, endpoint: string, data: any) => {
 
 ipcMain.handle('api:delete', async (_, endpoint: string) => {
   try {
-    const response = await httpClient.delete(endpoint);
+    const response = await apiClient.getClient().delete(endpoint);
     return response.data;
   } catch (error) {
     log.error(`Error in API DELETE ${endpoint}:`, error);

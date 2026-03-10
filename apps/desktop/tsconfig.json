@@ -11,7 +11,7 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "moduleResolution": "node",
-    "types": ["node", "electron"]
+    "types": ["node", "electron", "jest"]
   },
   "include": ["electron/**/*", "types/**/*"],
   "exclude": ["node_modules", "dist", "release"]

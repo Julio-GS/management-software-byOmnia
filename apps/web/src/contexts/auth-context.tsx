@@ -8,8 +8,8 @@ import React, {
   useCallback,
 } from "react";
 import { useRouter } from "next/navigation";
-import authService, { User, LoginRequest } from "@/src/lib/api/auth.service";
-import { tokenStorage } from "@/src/lib/api/client";
+import type { User, LoginRequest } from "@omnia/shared-types";
+import { apiClient, tokenStorage } from "@/lib/api-client-instance";
 import { isElectron, isElectronAuthenticated } from "@/lib/electron";
 
 interface AuthContextType {
@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Standard web auth flow
-    const hasToken = authService.isAuthenticated();
+    const hasToken = !!tokenStorage.getAccessToken();
 
     if (!hasToken) {
       setIsLoading(false);
@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const userData = await authService.me();
+      const userData = await apiClient.auth.getProfile();
       setUser(userData);
     } catch (error) {
       console.error("Failed to fetch user:", error);
@@ -92,7 +92,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (credentials: LoginRequest) => {
     setIsLoading(true);
     try {
-      const response = await authService.login(credentials);
+      console.log('🔍 DEBUG: Calling apiClient.auth.login...');
+      const response = await apiClient.auth.login(credentials);
+      
+      console.log('🔍 DEBUG: LOGIN RESPONSE:', response);
+      console.log('🔍 DEBUG: RESPONSE TYPE:', typeof response);
+      console.log('🔍 DEBUG: RESPONSE KEYS:', response ? Object.keys(response) : 'undefined');
+      console.log('🔍 DEBUG: access_token:', response?.access_token);
+      console.log('🔍 DEBUG: refresh_token:', response?.refresh_token);
+      console.log('🔍 DEBUG: user:', response?.user);
+      
+      // Store tokens
+      tokenStorage.setTokens(response.access_token, response.refresh_token);
+      
       setUser(response.user);
       setIsLoading(false);
 
@@ -100,13 +112,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // and middleware can handle the redirect
       window.location.href = "/dashboard";
     } catch (error) {
+      console.error('🔍 DEBUG: LOGIN ERROR:', error);
       setIsLoading(false);
       throw error;
     }
   };
 
   const logout = useCallback(() => {
-    authService.logout();
+    tokenStorage.clearTokens();
     setUser(null);
     router.push("/login");
   }, [router]);

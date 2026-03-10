@@ -1,4 +1,4 @@
-import { ApiClient } from './client';
+import { ApiClient } from './client.js';
 import type {
   LoginRequest,
   RegisterRequest,
@@ -13,33 +13,40 @@ export class AuthService {
    * Login with username and password
    */
   async login(credentials: LoginRequest): Promise<LoginResponse> {
-    const response = await this.client.post<LoginResponse>(
-      '/auth/login',
-      credentials
-    );
-    return response.data!;
+    console.log('🔍 AuthService.login - Credentials:', { email: credentials.email });
+    try {
+      const result = await this.client.post<LoginResponse>(
+        '/auth/login',
+        credentials
+      );
+      console.log('🔍 AuthService.login - Result:', result);
+      console.log('🔍 AuthService.login - Result type:', typeof result);
+      console.log('🔍 AuthService.login - Result keys:', result ? Object.keys(result) : 'undefined');
+      return result;
+    } catch (error) {
+      console.error('🔍 AuthService.login - Error:', error);
+      throw error;
+    }
   }
 
   /**
    * Register a new user
    */
   async register(userData: RegisterRequest): Promise<LoginResponse> {
-    const response = await this.client.post<LoginResponse>(
+    return this.client.post<LoginResponse>(
       '/auth/register',
       userData
     );
-    return response.data!;
   }
 
   /**
    * Refresh access token using refresh token
    */
   async refresh(refreshToken: string): Promise<LoginResponse> {
-    const response = await this.client.post<LoginResponse>(
+    return this.client.post<LoginResponse>(
       '/auth/refresh',
       { refresh_token: refreshToken }
     );
-    return response.data!;
   }
 
   /**
@@ -53,7 +60,6 @@ export class AuthService {
    * Get current user profile
    */
   async getProfile(): Promise<User> {
-    const response = await this.client.get<User>('/auth/profile');
-    return response.data!;
+    return this.client.get<User>('/auth/profile');
   }
 }

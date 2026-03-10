@@ -1,7 +1,7 @@
 import { getLogger } from '../utils/logger';
 import { getDesktopCredentials, getBackendUrl } from '../config/credentials';
 import { secureTokenStore } from './token-store';
-import { httpClient } from '../api/http-client';
+import { apiClient } from '../api/api-client-instance';
 import type { LoginResponse, User } from '@omnia/shared-types';
 
 const logger = getLogger();
@@ -29,9 +29,8 @@ class AuthService {
   private refreshTimer: NodeJS.Timeout | null = null;
 
   constructor() {
-    // Wire up the HTTP client with auth callbacks
-    httpClient.setTokenGetter(() => this.getToken());
-    httpClient.setUnauthorizedHandler(() => this.handleUnauthorized());
+    // API client is already configured with token getter and 401 handler
+    // in api-client-instance.ts - no need to wire it up here
   }
 
   /**
@@ -112,39 +111,35 @@ class AuthService {
     try {
       logger.info(`Attempting login for ${credentials.email}...`);
 
-      const data = await httpClient.post<AuthResponse>(
-        '/api/v1/auth/login',
-        {
-          email: credentials.email,
-          password: credentials.password,
-        },
-        { skipAuth: true }
-      );
+      const response = await apiClient.auth.login({
+        email: credentials.email,
+        password: credentials.password,
+      });
 
-      if (!data.access_token) {
+      if (!response.access_token) {
         throw new Error('No access token received from server');
       }
 
       // Save tokens securely
-      await secureTokenStore.saveAccessToken(data.access_token);
-      if (data.refresh_token) {
-        await secureTokenStore.saveRefreshToken(data.refresh_token);
-        this.refreshToken = data.refresh_token;
+      await secureTokenStore.saveAccessToken(response.access_token);
+      if (response.refresh_token) {
+        await secureTokenStore.saveRefreshToken(response.refresh_token);
+        this.refreshToken = response.refresh_token;
       }
 
-      this.currentToken = data.access_token;
-      this.currentUser = data.user || null;
+      this.currentToken = response.access_token;
+      this.currentUser = response.user || null;
 
       logger.info('Login successful');
 
-      if (data.user) {
-        logger.info(`Logged in as: ${data.user.firstName} ${data.user.lastName} (${data.user.role})`);
+      if (response.user) {
+        logger.info(`Logged in as: ${response.user.firstName} ${response.user.lastName} (${response.user.role})`);
       }
 
       // Schedule automatic token refresh
       this.scheduleTokenRefresh();
 
-      return data.access_token;
+      return response.access_token;
     } catch (error) {
       logger.error('Login failed:', error);
       throw error;
@@ -152,13 +147,11 @@ class AuthService {
   }
 
   /**
-   * Validate a token by making a test request to /auth/me
+   * Validate a token by making a test request to /auth/profile
    */
   private async validateToken(token: string): Promise<boolean> {
     try {
-      const user = await httpClient.get<UserInfo>('/api/v1/auth/me', {
-        skipRetry: true,
-      });
+      const user = await apiClient.auth.getProfile();
 
       if (user && user.id) {
         this.currentUser = user;
@@ -180,11 +173,7 @@ class AuthService {
     try {
       logger.info('Refreshing access token...');
 
-      const data = await httpClient.post<{ access_token: string }>(
-        '/api/v1/auth/refresh',
-        { refreshToken },
-        { skipAuth: true, skipRetry: true }
-      );
+      const data = await apiClient.auth.refresh(refreshToken);
 
       if (!data.access_token) {
         throw new Error('No access token received from refresh');

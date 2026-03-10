@@ -1,5 +1,4 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosError } from 'axios';
-import type { ApiResponse } from '@omnia/shared-types';
 
 export interface ApiClientConfig {
   baseURL: string;
@@ -61,8 +60,8 @@ export class ApiClient {
   async get<T>(
     url: string,
     config?: AxiosRequestConfig
-  ): Promise<ApiResponse<T>> {
-    const response = await this.axios.get<ApiResponse<T>>(url, config);
+  ): Promise<T> {
+    const response = await this.axios.get<T>(url, config);
     return response.data;
   }
 
@@ -70,8 +69,13 @@ export class ApiClient {
     url: string,
     data?: any,
     config?: AxiosRequestConfig
-  ): Promise<ApiResponse<T>> {
-    const response = await this.axios.post<ApiResponse<T>>(url, data, config);
+  ): Promise<T> {
+    console.log('🔍 ApiClient.post - URL:', url);
+    console.log('🔍 ApiClient.post - Data:', data);
+    const response = await this.axios.post<T>(url, data, config);
+    console.log('🔍 ApiClient.post - Full response:', response);
+    console.log('🔍 ApiClient.post - response.data:', response.data);
+    console.log('🔍 ApiClient.post - response.status:', response.status);
     return response.data;
   }
 
@@ -79,8 +83,8 @@ export class ApiClient {
     url: string,
     data?: any,
     config?: AxiosRequestConfig
-  ): Promise<ApiResponse<T>> {
-    const response = await this.axios.put<ApiResponse<T>>(url, data, config);
+  ): Promise<T> {
+    const response = await this.axios.put<T>(url, data, config);
     return response.data;
   }
 
@@ -88,16 +92,16 @@ export class ApiClient {
     url: string,
     data?: any,
     config?: AxiosRequestConfig
-  ): Promise<ApiResponse<T>> {
-    const response = await this.axios.patch<ApiResponse<T>>(url, data, config);
+  ): Promise<T> {
+    const response = await this.axios.patch<T>(url, data, config);
     return response.data;
   }
 
   async delete<T>(
     url: string,
     config?: AxiosRequestConfig
-  ): Promise<ApiResponse<T>> {
-    const response = await this.axios.delete<ApiResponse<T>>(url, config);
+  ): Promise<T> {
+    const response = await this.axios.delete<T>(url, config);
     return response.data;
   }
 }

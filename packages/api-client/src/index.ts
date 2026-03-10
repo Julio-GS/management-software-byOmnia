@@ -1,12 +1,12 @@
-import { ApiClient, ApiClientConfig } from './client';
-import { AuthService } from './auth.service';
-import { ProductsService } from './products.service';
-import { CategoriesService } from './categories.service';
-import { InventoryService } from './inventory.service';
-import { PricingService } from './pricing.service';
-import { SalesService } from './sales.service';
-import { ReportsService } from './reports.service';
-import { SyncService } from './sync.service';
+import { ApiClient, ApiClientConfig } from './client.js';
+import { AuthService } from './auth.service.js';
+import { ProductsService } from './products.service.js';
+import { CategoriesService } from './categories.service.js';
+import { InventoryService } from './inventory.service.js';
+import { PricingService } from './pricing.service.js';
+import { SalesService } from './sales.service.js';
+import { ReportsService } from './reports.service.js';
+import { SyncService } from './sync.service.js';
 
 /**
  * Main API client for OMNIA Management System
@@ -70,17 +70,17 @@ export class OmniaApiClient {
 }
 
 // Export main class
-export { ApiClient, type ApiClientConfig } from './client';
+export { ApiClient, type ApiClientConfig } from './client.js';
 
 // Export individual service classes for advanced usage
-export { AuthService } from './auth.service';
-export { ProductsService } from './products.service';
-export { CategoriesService } from './categories.service';
-export { InventoryService } from './inventory.service';
-export { PricingService } from './pricing.service';
-export { SalesService } from './sales.service';
-export { ReportsService } from './reports.service';
-export { SyncService } from './sync.service';
+export { AuthService } from './auth.service.js';
+export { ProductsService } from './products.service.js';
+export { CategoriesService } from './categories.service.js';
+export { InventoryService } from './inventory.service.js';
+export { PricingService } from './pricing.service.js';
+export { SalesService } from './sales.service.js';
+export { ReportsService } from './reports.service.js';
+export { SyncService } from './sync.service.js';
 
 // Re-export shared types for convenience
 export * from '@omnia/shared-types';

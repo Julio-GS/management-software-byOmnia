@@ -104,3 +104,43 @@ export function sanitizeString(value: string | null | undefined): string | null 
   }
   return value.replace(/\0/g, '').trim();
 }
+
+/**
+ * Convert camelCase string to snake_case
+ */
+export function camelToSnake(str: string): string {
+  return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+}
+
+/**
+ * Convert snake_case string to camelCase
+ */
+export function snakeToCamel(str: string): string {
+  return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+}
+
+/**
+ * Convert object keys from camelCase to snake_case
+ */
+export function objectToSnakeCase<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      result[camelToSnake(key)] = obj[key];
+    }
+  }
+  return result;
+}
+
+/**
+ * Convert object keys from snake_case to camelCase
+ */
+export function objectToCamelCase<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      result[snakeToCamel(key)] = obj[key];
+    }
+  }
+  return result;
+}
