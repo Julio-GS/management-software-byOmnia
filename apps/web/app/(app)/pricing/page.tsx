@@ -2,10 +2,18 @@
 
 import { GlobalMarkupSettings } from "@/src/features/pricing/GlobalMarkupSettings"
 import { PriceCalculator } from "@/src/features/pricing/PriceCalculator"
+import { PricingMobileView } from "@/src/features/pricing/mobile/pricing-mobile-view"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs"
+import { useResponsive } from "@/hooks/use-responsive"
 
 export default function PricingPage() {
+  const { isMobile } = useResponsive()
+
+  if (isMobile) {
+    return <PricingMobileView />
+  }
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex flex-col gap-2">
