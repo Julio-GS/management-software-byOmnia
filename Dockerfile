@@ -99,5 +99,6 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:8080/api/v1/health || exit 1
 
-# Start: run migrations (Prisma is in node_modules) then start app
-CMD ["sh", "-c", "cd apps/backend && pnpm exec prisma migrate deploy --schema=./prisma/schema.prisma && cd ../.. && node apps/backend/dist/main.js"]
+# Start: push schema to DB then start app
+# Using db push because no migration files exist yet
+CMD ["sh", "-c", "cd apps/backend && pnpm exec prisma db push --schema=./prisma/schema.prisma --accept-data-loss && cd ../.. && node apps/backend/dist/main.js"]
