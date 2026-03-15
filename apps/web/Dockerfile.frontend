@@ -45,7 +45,10 @@ COPY packages/api-client ./packages/api-client
 RUN pnpm --filter @omnia/shared-types build
 RUN pnpm --filter @omnia/api-client build
 
-# Then build web app
+# Then build web app with memory limits to prevent OOM
+# Railway default: 8GB RAM, but Next.js can spike during build
+# Limit Node.js to 4GB to leave headroom for OS + other processes
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN pnpm --filter @omnia/web build
 
 # Stage 3: Production Runner
