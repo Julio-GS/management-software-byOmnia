@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Param,
   Query,
@@ -12,9 +13,11 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
+import { CancelSaleDto } from './dto/cancel-sale.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Sales')
 @ApiBearerAuth()
@@ -61,6 +64,21 @@ export class SalesController {
   @ApiResponse({ status: 404, description: 'Sale not found' })
   findBySaleNumber(@Param('saleNumber') saleNumber: string) {
     return this.salesService.findBySaleNumber(saleNumber);
+  }
+
+  @Patch(':id/cancel')
+  @Roles('cashier', 'manager', 'admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel a completed sale and restore stock' })
+  @ApiResponse({ status: 200, description: 'Sale cancelled successfully' })
+  @ApiResponse({ status: 404, description: 'Sale not found' })
+  @ApiResponse({ status: 409, description: 'Sale cannot be cancelled (wrong status)' })
+  cancel(
+    @Param('id') id: string,
+    @Body() _cancelSaleDto: CancelSaleDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.salesService.cancel(id, user.id);
   }
 
   @Get(':id')

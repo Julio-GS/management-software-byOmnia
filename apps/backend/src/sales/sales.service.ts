@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
+import { MovementType } from '@prisma/client';
 
 @Injectable()
 export class SalesService {
@@ -174,6 +175,61 @@ export class SalesService {
     }
 
     return sale;
+  }
+
+  async cancel(id: string, userId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const sale = await tx.sale.findUnique({
+        where: { id },
+        include: { items: true },
+      });
+
+      if (!sale) {
+        throw new NotFoundException(`Sale ${id} not found`);
+      }
+
+      if (sale.status !== 'completed') {
+        throw new ConflictException(
+          `Sale ${sale.saleNumber} cannot be cancelled: current status is ${sale.status}`,
+        );
+      }
+
+      for (const item of sale.items) {
+        const product = await tx.product.findUnique({
+          where: { id: item.productId },
+        });
+
+        if (!product) continue; // defensive: product deleted after sale
+
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { stock: { increment: item.quantity } },
+        });
+
+        await tx.inventoryMovement.create({
+          data: {
+            productId: item.productId,
+            type: MovementType.ENTRY,
+            quantity: item.quantity,
+            previousStock: product.stock,
+            newStock: product.stock + item.quantity,
+            reason: 'Sale cancellation',
+            reference: sale.saleNumber,
+            userId,
+          },
+        });
+      }
+
+      return tx.sale.update({
+        where: { id },
+        data: { status: 'cancelled' },
+        include: {
+          items: {
+            include: { product: true },
+          },
+        },
+      });
+    });
   }
 
   private async generateSaleNumber(): Promise<string> {
