@@ -36,7 +36,7 @@ COPY --from=deps /app/packages/shared-types/node_modules ./packages/shared-types
 COPY --from=deps /app/packages/api-client/node_modules ./packages/api-client/node_modules
 
 # Copy source files
-COPY package.json pnpm-workspace.yaml turbo.json ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json ./
 COPY apps/web ./apps/web
 COPY packages/shared-types ./packages/shared-types
 COPY packages/api-client ./packages/api-client
