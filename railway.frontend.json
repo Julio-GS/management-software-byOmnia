@@ -2,7 +2,14 @@
   "$schema": "https://railway.app/schema.json",
   "build": {
     "builder": "DOCKERFILE",
-    "dockerfilePath": "apps/web/Dockerfile.frontend"
+    "dockerfilePath": "apps/web/Dockerfile.frontend",
+    "watchPatterns": [
+      "apps/web/**",
+      "packages/**",
+      "package.json",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml"
+    ]
   },
   "deploy": {
     "numReplicas": 1,
