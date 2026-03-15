@@ -14,6 +14,14 @@ const nextConfig = {
       unoptimized: true,
     },
   }),
+  // Optimize build performance for Railway (reduces memory usage)
+  experimental: {
+    // Reduce memory usage during build by limiting worker threads
+    workerThreads: false,
+    cpus: 1,
+  },
+  // Disable source maps in production to reduce memory during build
+  productionBrowserSourceMaps: false,
 }
 
 export default nextConfig
