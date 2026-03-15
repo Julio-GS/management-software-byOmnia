@@ -6,9 +6,13 @@
 # DOCUMENTATION & ARCHITECTURE (EXCLUDED)
 # ==========================================
 
-# Root-level documentation (exclude all except workspace READMEs)
-#/*.md
+# All markdown files at root level (except README.md)
+*.md
 !README.md
+
+# Keep README files in apps and packages directories
+!apps/*/README.md
+!packages/*/README.md
 
 # Documentation directory
 docs/
@@ -272,6 +276,11 @@ docker-compose.override.yml
 __v0_runtime_loader.js
 __v0_devtools.tsx
 __v0_jsx-dev-runtime.ts
+
+# Build outputs and temp files
+build-output.txt
+typescript-errors.txt
+*.txt
 
 # Backup files
 *.bak
