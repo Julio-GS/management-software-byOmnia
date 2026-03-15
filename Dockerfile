@@ -64,8 +64,9 @@ COPY --from=builder /app/apps/backend/prisma ./apps/backend/prisma
 COPY --from=builder /app/apps/web/.next ./apps/web/.next
 COPY --from=builder /app/apps/web/node_modules ./apps/web/node_modules
 COPY --from=builder /app/apps/web/package.json ./apps/web/
-COPY --from=builder /app/apps/web/public ./apps/web/public
 COPY --from=builder /app/apps/web/next.config.mjs ./apps/web/
+# Copy public directory if it exists (optional)
+COPY --from=builder /app/apps/web/public ./apps/web/public 2>/dev/null || true
 
 # Copy built packages
 COPY --from=builder /app/packages ./packages
@@ -85,7 +86,7 @@ RUN chown -R nextjs:nodejs /app
 USER nextjs
 
 # Expose ports
-EXPOSE 3000 3001
+EXPOSE 3000 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \

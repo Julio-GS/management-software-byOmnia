@@ -45,14 +45,14 @@ async function handle401(): Promise<void> {
  */
 console.log('🔍 [api-client-instance] Creating apiClient...');
 console.log('🔍 [api-client-instance] Config:', {
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api",
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1",
   hasGetToken: !!getAccessToken,
   hasOnUnauthorized: !!handle401,
   environment: "web",
 });
 
 export const apiClient = new OmniaApiClient({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api",
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1",
   getToken: getAccessToken,
   onUnauthorized: handle401,
 });
