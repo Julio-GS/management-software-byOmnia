@@ -1,11 +1,21 @@
+/**
+ * App Layout - Responsive Shell
+ * Reference: MOBILE_ADAPTATION_SDD.md - Section "Navigation Hierarchy"
+ * 
+ * Responsive layout that adapts to different screen sizes:
+ * - Mobile (< 640px): Bottom navigation + mobile header
+ * - Tablet (640-1023px): Bottom navigation + desktop header
+ * - Desktop (>= 1024px): Sidebar + desktop header
+ */
+
 "use client"
 
 import { AppNavigation } from "@/shared/components/layout/app-navigation"
-import { Bell, ChevronRight } from "lucide-react"
-import { Badge } from "@/shared/components/ui/badge"
-import { SyncStatusBadge } from "@/shared/components/layout/SyncStatusBadge"
-import { SyncQueueIndicator } from "@/shared/components/layout/SyncQueueIndicator"
+import { DesktopHeader } from "@/src/shared/components/layout/desktop-header"
+import { MobileHeader } from "@/src/shared/components/layout/mobile-header"
+import { BottomNavigation } from "@/src/shared/components/layout/bottom-navigation"
 import { usePathname } from "next/navigation"
+import { useResponsive } from "@/hooks/use-responsive"
 
 const pathToTitle: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -24,46 +34,44 @@ export default function AppLayout({
 }) {
   const pathname = usePathname()
   const pageTitle = pathToTitle[pathname] || "Dashboard"
+  const { isDesktop } = useResponsive()
 
   return (
     <div className="flex h-screen bg-background">
-      {/* Sidebar */}
-      <AppNavigation />
+      {/* Sidebar - Desktop Only (>= 1024px) */}
+      <div className="hidden lg:block">
+        <AppNavigation />
+      </div>
 
       {/* Main Content */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Top Bar */}
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-6">
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground">Omnia</span>
-            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
-            <span className="font-medium text-foreground">{pageTitle}</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <SyncStatusBadge />
-            <SyncQueueIndicator />
-            <span className="font-mono text-xs text-muted-foreground">
-              {new Date().toLocaleDateString("es-AR", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </span>
-            <button
-              className="relative flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-              aria-label="Notificaciones"
-            >
-              <Bell className="h-[18px] w-[18px]" />
-              <Badge className="absolute -right-1 -top-1 h-4 min-w-4 rounded-full bg-destructive px-1 text-[10px] text-white">
-                8
-              </Badge>
-            </button>
-          </div>
-        </header>
+        {/* Mobile Header - Mobile/Tablet Only (< 1024px) */}
+        <div className="lg:hidden">
+          <MobileHeader title={pageTitle} />
+        </div>
+
+        {/* Desktop Header - Desktop Only (>= 1024px) */}
+        <div className="hidden lg:block">
+          <DesktopHeader title={pageTitle} />
+        </div>
 
         {/* Content Area */}
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+        <main 
+          className={
+            // Mobile: Add bottom padding for bottom nav + safe area
+            // Desktop: Standard padding
+            isDesktop 
+              ? "flex-1 overflow-auto p-6"
+              : "flex-1 overflow-auto p-4 pb-[calc(3.5rem+env(safe-area-inset-bottom))] sm:p-6"
+          }
+        >
+          {children}
+        </main>
+      </div>
+
+      {/* Bottom Navigation - Mobile/Tablet Only (< 1024px) */}
+      <div className="lg:hidden">
+        <BottomNavigation />
       </div>
     </div>
   )
