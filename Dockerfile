@@ -42,7 +42,9 @@ COPY packages/shared-types ./packages/shared-types
 COPY packages/api-client ./packages/api-client
 
 # Generate Prisma Client FIRST (before build)
-RUN npx prisma generate --schema=./apps/backend/prisma/schema.prisma
+WORKDIR /app/apps/backend
+RUN npx prisma generate
+WORKDIR /app
 
 # Build shared packages FIRST (explicit order)
 RUN pnpm --filter @omnia/shared-types build
@@ -101,4 +103,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:8080/api/v1/health || exit 1
 
 # Start backend (prisma migrate + app)
-CMD ["sh", "-c", "npx prisma migrate deploy --schema=./apps/backend/prisma/schema.prisma && node apps/backend/dist/main.js"]
+CMD ["sh", "-c", "cd apps/backend && npx prisma migrate deploy && cd ../.. && node apps/backend/dist/main.js"]
