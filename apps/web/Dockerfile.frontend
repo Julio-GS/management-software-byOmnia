@@ -1,7 +1,7 @@
 # ==========================================
 # Frontend Dockerfile (Next.js)
 # ==========================================
-# Optimized for Railway deployment
+# Optimized for Railway deployment with PNPM
 # Port: 3000
 
 # Stage 1: Dependencies
@@ -48,6 +48,9 @@ RUN pnpm turbo build --filter=@omnia/web
 FROM node:20-alpine AS runner
 RUN apk add --no-cache libc6-compat curl
 
+# Install PNPM in runtime (lightweight: ~10MB)
+RUN corepack enable && corepack prepare pnpm@10.26.2 --activate
+
 # Set production environment
 ENV NODE_ENV=production
 ENV PORT=3000
@@ -55,25 +58,43 @@ ENV HOSTNAME="0.0.0.0"
 
 WORKDIR /app
 
-# Create non-root user
+# Create non-root user first
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-# Copy Next.js standalone output
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+# Copy workspace configs for pnpm resolution
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
 
-# Copy public files if they exist
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
+# Copy Next.js build output
+COPY --from=builder /app/apps/web/.next ./apps/web/.next
+COPY --from=builder /app/apps/web/package.json ./apps/web/package.json
+COPY --from=builder /app/apps/web/next.config.mjs ./apps/web/next.config.mjs
+COPY --from=builder /app/apps/web/public ./apps/web/public
+
+# Copy built shared packages (dist only, pnpm will install deps)
+COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
+COPY --from=builder /app/packages/shared-types/package.json ./packages/shared-types/package.json
+COPY --from=builder /app/packages/api-client/dist ./packages/api-client/dist
+COPY --from=builder /app/packages/api-client/package.json ./packages/api-client/package.json
+
+# Install ONLY production dependencies using pnpm
+# This respects workspace protocol and deduplicates properly
+RUN pnpm install --prod --frozen-lockfile
+
+# Set correct ownership
+RUN chown -R nextjs:nodejs /app
 
 USER nextjs
 
 # Expose frontend port
 EXPOSE 3000
 
-# Health check - Next.js doesn't have /api/health by default, check homepage
+# Health check - check homepage
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:3000/ || exit 1
 
-# Start Next.js standalone server
-CMD ["node", "apps/web/server.js"]
+# Start Next.js production server
+WORKDIR /app/apps/web
+CMD ["node_modules/.bin/next", "start"]
