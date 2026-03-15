@@ -54,7 +54,7 @@ interface TouchState {
  */
 export function useTouchGestures<T extends HTMLElement = HTMLDivElement>(
   options: TouchGestureOptions
-): RefObject<T> {
+): RefObject<T | null> {
   const {
     onSwipeLeft,
     onSwipeRight,
@@ -66,7 +66,7 @@ export function useTouchGestures<T extends HTMLElement = HTMLDivElement>(
     preventDefault = false,
   } = options;
 
-  const elementRef = useRef<T>(null);
+  const elementRef = useRef<T | null>(null);
   const touchStateRef = useRef<TouchState | null>(null);
 
   useEffect(() => {

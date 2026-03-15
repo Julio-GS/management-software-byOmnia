@@ -36,7 +36,7 @@ export interface BottomNavigationProps {
 interface NavItem {
   id: string;
   label: string;
-  icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
+  icon: React.ComponentType<any>;
   href: string;
   badge?: number;
 }
@@ -137,7 +137,6 @@ export function BottomNavigation({ className }: BottomNavigationProps) {
                 'w-5 h-5 transition-colors',
                 active ? 'text-primary' : 'text-muted-foreground'
               )}
-              strokeWidth={2}
               aria-hidden="true"
             />
 
