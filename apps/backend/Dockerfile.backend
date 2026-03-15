@@ -1,7 +1,7 @@
 # ==========================================
 # Backend Dockerfile (NestJS + Prisma)
 # ==========================================
-# Optimized for Railway deployment
+# Optimized for Railway deployment with PNPM
 # Port: 8080
 
 # Stage 1: Dependencies
@@ -47,12 +47,12 @@ RUN cd apps/backend && npx prisma generate
 # Build packages first (shared-types, api-client), then backend
 RUN pnpm turbo build --filter=@omnia/backend
 
-# Prune dependencies to production only
-RUN pnpm --filter=@omnia/backend --prod deploy pruned
-
 # Stage 3: Production Runner
 FROM node:20-alpine AS runner
 RUN apk add --no-cache libc6-compat openssl curl bash
+
+# Install PNPM in runtime (lightweight: ~10MB)
+RUN corepack enable && corepack prepare pnpm@10.26.2 --activate
 
 # Set production environment
 ENV NODE_ENV=production
@@ -60,13 +60,25 @@ ENV PORT=8080
 
 WORKDIR /app
 
-# Copy built application
-COPY --from=builder /app/apps/backend/dist ./dist
-COPY --from=builder /app/apps/backend/prisma ./prisma
-COPY --from=builder /app/apps/backend/package.json ./
+# Copy workspace configs for pnpm resolution
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
 
-# Copy production dependencies
-COPY --from=builder /app/pruned/node_modules ./node_modules
+# Copy built backend
+COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
+COPY --from=builder /app/apps/backend/prisma ./apps/backend/prisma
+COPY --from=builder /app/apps/backend/package.json ./apps/backend/package.json
+
+# Copy built shared packages (dist only, pnpm will install deps)
+COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
+COPY --from=builder /app/packages/shared-types/package.json ./packages/shared-types/package.json
+COPY --from=builder /app/packages/api-client/dist ./packages/api-client/dist
+COPY --from=builder /app/packages/api-client/package.json ./packages/api-client/package.json
+
+# Install ONLY production dependencies using pnpm
+# This respects workspace protocol and deduplicates properly
+RUN pnpm install --prod --frozen-lockfile
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
@@ -82,5 +94,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:8080/api/v1/health || exit 1
 
-# Start backend
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+# Start backend (prisma migrate + app)
+CMD ["sh", "-c", "npx prisma migrate deploy && node apps/backend/dist/main.js"]
