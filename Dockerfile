@@ -45,7 +45,10 @@ COPY packages/api-client ./packages/api-client
 RUN pnpm --filter @omnia/shared-types build
 RUN pnpm --filter @omnia/api-client build
 
-# Then build backend (prebuild will run prisma generate automatically)
+# Generate Prisma Client in builder stage
+RUN cd apps/backend && pnpm exec prisma generate
+
+# Then build backend
 RUN pnpm --filter @omnia/backend build
 
 # Stage 3: Production Runner
@@ -70,6 +73,7 @@ COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
 COPY --from=builder /app/apps/backend/prisma ./apps/backend/prisma
 COPY --from=builder /app/apps/backend/package.json ./apps/backend/package.json
+COPY --from=builder /app/apps/backend/node_modules ./apps/backend/node_modules
 
 # Copy built shared packages (dist only, pnpm will install deps)
 COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
@@ -95,5 +99,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:8080/api/v1/health || exit 1
 
-# Start backend (prisma migrate + app)
+# Start backend - run migrations then start app
 CMD ["sh", "-c", "cd apps/backend && pnpm exec prisma migrate deploy && cd ../.. && node apps/backend/dist/main.js"]
