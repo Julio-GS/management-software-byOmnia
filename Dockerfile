@@ -41,15 +41,17 @@ COPY apps/backend ./apps/backend
 COPY packages/shared-types ./packages/shared-types
 COPY packages/api-client ./packages/api-client
 
-# Generate Prisma Client
-RUN cd apps/backend && npx prisma generate
+# Generate Prisma Client FIRST (before build)
+RUN npx prisma generate --schema=./apps/backend/prisma/schema.prisma
 
 # Build shared packages FIRST (explicit order)
 RUN pnpm --filter @omnia/shared-types build
 RUN pnpm --filter @omnia/api-client build
 
-# Then build backend
-RUN pnpm --filter @omnia/backend build
+# Then build backend (use nest directly to avoid prebuild script)
+WORKDIR /app/apps/backend
+RUN npx nest build
+WORKDIR /app
 
 # Stage 3: Production Runner
 FROM node:20-alpine AS runner
@@ -99,4 +101,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:8080/api/v1/health || exit 1
 
 # Start backend (prisma migrate + app)
-CMD ["sh", "-c", "npx prisma migrate deploy && node apps/backend/dist/main.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy --schema=./apps/backend/prisma/schema.prisma && node apps/backend/dist/main.js"]
