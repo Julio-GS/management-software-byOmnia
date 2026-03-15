@@ -1,7 +1,11 @@
 "use client"
 
 import { ReportesView } from "@/src/features/reports/components/reportes-view"
+import { ReportsMobileView } from "@/src/features/reports/mobile/reports-mobile-view"
+import { useResponsive } from "@/hooks/use-responsive"
 
 export default function ReportesPage() {
-  return <ReportesView />
+  const { isMobile } = useResponsive()
+  
+  return isMobile ? <ReportsMobileView /> : <ReportesView />
 }
