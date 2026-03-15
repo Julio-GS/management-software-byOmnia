@@ -41,8 +41,12 @@ COPY apps/web ./apps/web
 COPY packages/shared-types ./packages/shared-types
 COPY packages/api-client ./packages/api-client
 
-# Build ALL packages with Turborepo (it handles dependencies automatically)
-RUN pnpm turbo build --filter=@omnia/web...
+# Build shared packages FIRST (explicit order)
+RUN pnpm --filter @omnia/shared-types build
+RUN pnpm --filter @omnia/api-client build
+
+# Then build web app
+RUN pnpm --filter @omnia/web build
 
 # Stage 3: Production Runner
 FROM node:20-alpine AS runner

@@ -44,8 +44,12 @@ COPY packages/api-client ./packages/api-client
 # Generate Prisma Client
 RUN cd apps/backend && npx prisma generate
 
-# Build ALL packages with Turborepo (it handles dependencies automatically)
-RUN pnpm turbo build --filter=@omnia/backend...
+# Build shared packages FIRST (explicit order)
+RUN pnpm --filter @omnia/shared-types build
+RUN pnpm --filter @omnia/api-client build
+
+# Then build backend
+RUN pnpm --filter @omnia/backend build
 
 # Stage 3: Production Runner
 FROM node:20-alpine AS runner
