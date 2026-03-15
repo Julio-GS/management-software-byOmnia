@@ -46,9 +46,10 @@ RUN pnpm --filter @omnia/shared-types build
 RUN pnpm --filter @omnia/api-client build
 
 # Then build web app with memory limits to prevent OOM
-# Railway default: 8GB RAM, but Next.js can spike during build
-# Limit Node.js to 4GB to leave headroom for OS + other processes
+# IMPORTANT: NEXT_PUBLIC_* variables are baked into the bundle at build time.
+# We use a placeholder here and replace it at runtime via entrypoint.
 ENV NODE_OPTIONS="--max-old-space-size=4096"
+ENV NEXT_PUBLIC_API_URL="RUNTIME_API_URL_PLACEHOLDER"
 RUN pnpm --filter @omnia/web build
 
 # Stage 3: Production Runner
@@ -79,6 +80,7 @@ COPY --from=builder /app/apps/web/.next ./apps/web/.next
 COPY --from=builder /app/apps/web/package.json ./apps/web/package.json
 COPY --from=builder /app/apps/web/next.config.mjs ./apps/web/next.config.mjs
 COPY --from=builder /app/apps/web/public ./apps/web/public
+COPY --from=builder /app/apps/web/entrypoint.sh ./apps/web/entrypoint.sh
 
 # Copy built shared packages (dist only, pnpm will install deps)
 COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
@@ -91,7 +93,8 @@ COPY --from=builder /app/packages/api-client/package.json ./packages/api-client/
 RUN pnpm install --prod --frozen-lockfile
 
 # Set correct ownership
-RUN chown -R nextjs:nodejs /app
+RUN chown -R nextjs:nodejs /app && \
+    chmod +x /app/apps/web/entrypoint.sh
 
 USER nextjs
 
@@ -102,6 +105,6 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:3000/ || exit 1
 
-# Start Next.js production server
+# Start Next.js production server via entrypoint (replaces NEXT_PUBLIC placeholders)
 WORKDIR /app/apps/web
-CMD ["node_modules/.bin/next", "start"]
+CMD ["sh", "entrypoint.sh"]
