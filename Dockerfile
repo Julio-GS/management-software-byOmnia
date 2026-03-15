@@ -1,0 +1,102 @@
+# ==========================================
+# Backend Dockerfile (NestJS + Prisma)
+# ==========================================
+# Optimized for Railway deployment with PNPM
+# Port: 8080
+
+# Stage 1: Dependencies
+FROM node:20-alpine AS deps
+RUN apk add --no-cache libc6-compat openssl
+RUN corepack enable && corepack prepare pnpm@10.26.2 --activate
+
+WORKDIR /app
+
+# Copy workspace root files
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json ./
+
+# Copy all package.json files (including shared packages)
+COPY apps/backend/package.json ./apps/backend/
+COPY packages/shared-types/package.json ./packages/shared-types/
+COPY packages/api-client/package.json ./packages/api-client/
+
+# Install ALL dependencies (we need them for build)
+RUN pnpm install --frozen-lockfile
+
+# Stage 2: Builder
+FROM node:20-alpine AS builder
+RUN apk add --no-cache libc6-compat openssl
+RUN corepack enable && corepack prepare pnpm@10.26.2 --activate
+
+WORKDIR /app
+
+# Copy dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/backend/node_modules ./apps/backend/node_modules
+COPY --from=deps /app/packages/shared-types/node_modules ./packages/shared-types/node_modules
+COPY --from=deps /app/packages/api-client/node_modules ./packages/api-client/node_modules
+
+# Copy source files
+COPY package.json pnpm-workspace.yaml turbo.json ./
+COPY apps/backend ./apps/backend
+COPY packages/shared-types ./packages/shared-types
+COPY packages/api-client ./packages/api-client
+
+# Generate Prisma Client
+RUN cd apps/backend && npx prisma generate
+
+# Build shared packages FIRST (explicit order)
+RUN pnpm --filter @omnia/shared-types build
+RUN pnpm --filter @omnia/api-client build
+
+# Then build backend
+RUN pnpm --filter @omnia/backend build
+
+# Stage 3: Production Runner
+FROM node:20-alpine AS runner
+RUN apk add --no-cache libc6-compat openssl curl bash
+
+# Install PNPM in runtime (lightweight: ~10MB)
+RUN corepack enable && corepack prepare pnpm@10.26.2 --activate
+
+# Set production environment
+ENV NODE_ENV=production
+ENV PORT=8080
+
+WORKDIR /app
+
+# Copy workspace configs for pnpm resolution
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
+
+# Copy built backend
+COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
+COPY --from=builder /app/apps/backend/prisma ./apps/backend/prisma
+COPY --from=builder /app/apps/backend/package.json ./apps/backend/package.json
+
+# Copy built shared packages (dist only, pnpm will install deps)
+COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
+COPY --from=builder /app/packages/shared-types/package.json ./packages/shared-types/package.json
+COPY --from=builder /app/packages/api-client/dist ./packages/api-client/dist
+COPY --from=builder /app/packages/api-client/package.json ./packages/api-client/package.json
+
+# Install ONLY production dependencies using pnpm
+# This respects workspace protocol and deduplicates properly
+RUN pnpm install --prod --frozen-lockfile
+
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nestjs && \
+    chown -R nestjs:nodejs /app
+
+USER nestjs
+
+# Expose backend port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:8080/api/v1/health || exit 1
+
+# Start backend (prisma migrate + app)
+CMD ["sh", "-c", "npx prisma migrate deploy && node apps/backend/dist/main.js"]

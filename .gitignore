@@ -6,9 +6,10 @@
 # DOCUMENTATION & ARCHITECTURE (EXCLUDED)
 # ==========================================
 
-# All markdown files at root level (except README.md)
+# All markdown files at root level (except README.md and RAILWAY.md)
 *.md
 !README.md
+!RAILWAY.md
 
 # Keep README files in apps and packages directories
 !apps/*/README.md
