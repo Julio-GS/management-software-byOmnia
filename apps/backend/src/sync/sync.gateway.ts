@@ -24,7 +24,7 @@ import { JwtService } from '@nestjs/jwt';
  */
 @WebSocketGateway({
   cors: {
-    origin: '*', // Configure this properly in production
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
     credentials: true,
   },
   namespace: '/sync',
