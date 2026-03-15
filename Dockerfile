@@ -43,7 +43,7 @@ RUN pnpm turbo build
 
 # Stage 3: Production runner
 FROM node:20-alpine AS runner
-RUN apk add --no-cache libc6-compat openssl bash
+RUN apk add --no-cache libc6-compat openssl bash curl
 
 # Set production environment
 ENV NODE_ENV=production
@@ -65,11 +65,14 @@ COPY --from=builder /app/apps/web/.next ./apps/web/.next
 COPY --from=builder /app/apps/web/node_modules ./apps/web/node_modules
 COPY --from=builder /app/apps/web/package.json ./apps/web/
 COPY --from=builder /app/apps/web/next.config.mjs ./apps/web/
-# Copy public directory if it exists (optional)
-COPY --from=builder /app/apps/web/public ./apps/web/public 2>/dev/null || true
 
-# Copy built packages
-COPY --from=builder /app/packages ./packages
+# Copy built packages (only dist and package.json, not node_modules)
+COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
+COPY --from=builder /app/packages/shared-types/package.json ./packages/shared-types/
+COPY --from=builder /app/packages/shared-types/node_modules ./packages/shared-types/node_modules
+COPY --from=builder /app/packages/api-client/dist ./packages/api-client/dist
+COPY --from=builder /app/packages/api-client/package.json ./packages/api-client/
+COPY --from=builder /app/packages/api-client/node_modules ./packages/api-client/node_modules
 
 # Copy root package.json and workspace files
 COPY --from=builder /app/package.json ./package.json
@@ -77,15 +80,16 @@ COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 
 # Copy start script
 COPY start.sh ./start.sh
-RUN chmod +x ./start.sh
 
-# Change ownership to non-root user
-RUN chown -R nextjs:nodejs /app
+# Create public directory and set permissions (must be as root)
+RUN mkdir -p ./apps/web/public && \
+    chmod +x ./start.sh && \
+    chown -R nextjs:nodejs /app
 
 # Switch to non-root user
 USER nextjs
 
-# Expose ports
+# Expose ports (backend: 8080, frontend: 3000)
 EXPOSE 3000 8080
 
 # Health check
