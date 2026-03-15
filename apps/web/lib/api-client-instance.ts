@@ -55,7 +55,6 @@ export const apiClient = new OmniaApiClient({
   baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1",
   getToken: getAccessToken,
   onUnauthorized: handle401,
-  environment: "web",
 });
 
 console.log('🔍 [api-client-instance] apiClient created:', apiClient);

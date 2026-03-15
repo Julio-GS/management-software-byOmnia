@@ -24,14 +24,13 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: "Dashboard", icon: LayoutDashboard, href: "/" },
+  { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
   { label: "Punto de Venta", icon: ShoppingCart, href: "/pos" },
-  { label: "Escáner POS", icon: Barcode, href: "/pos" },
   { label: "Inventario", icon: Package, href: "/inventory", badge: 8 },
   { label: "Precios", icon: DollarSign, href: "/pricing" },
-  { label: "Promociones", icon: Tag, href: "/promociones" },
-  { label: "Reportes", icon: BarChart3, href: "/reportes" },
-  { label: "Ajustes", icon: Settings, href: "/ajustes" },
+  { label: "Promociones", icon: Tag, href: "/promotions" },
+  { label: "Reportes", icon: BarChart3, href: "/reports" },
+  { label: "Ajustes", icon: Settings, href: "/settings" },
 ]
 
 export function AppNavigation() {
@@ -82,20 +81,10 @@ export function AppNavigation() {
         })}
       </nav>
 
-      <div className="border-t border-sidebar-border px-4 py-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold text-sidebar-accent-foreground">
-            MG
-          </div>
-          <div className="flex flex-col">
-            <span className="text-xs font-medium text-sidebar-foreground">
-              Maria Garcia
-            </span>
-            <span className="text-[11px] text-sidebar-foreground/50">
-              Cajera - Turno Mañana
-            </span>
-          </div>
-        </div>
+      <div className="border-t border-sidebar-border px-6 py-4">
+        <p className="text-xs text-center text-sidebar-foreground/60">
+          Software de gestión by Omnia
+        </p>
       </div>
     </aside>
   )

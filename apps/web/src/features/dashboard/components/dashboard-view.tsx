@@ -5,53 +5,25 @@ import { Badge } from "@/shared/components/ui/badge"
 import {
   DollarSign,
   ShoppingCart,
-  Users,
+  PackageMinus,
   TrendingUp,
   ArrowUpRight,
   ArrowDownRight,
   Clock,
-  PackageMinus,
 } from "lucide-react"
 import { DailySalesChart } from "@/shared/components/common/daily-sales-chart"
+import { useDashboardMetrics } from "@/hooks/use-dashboard-metrics"
+import { MetricCardSkeleton } from "@/shared/components/ui/metric-card-skeleton"
+import { DashboardErrorState } from "./dashboard-error-state"
+import { formatCurrency, formatNumber } from "@/shared/utils/utils"
 
 interface StatCard {
   title: string
   value: string
-  change: string
-  trend: "up" | "down"
+  change?: string
+  trend?: "up" | "down"
   icon: React.ComponentType<{ className?: string }>
 }
-
-const stats: StatCard[] = [
-  {
-    title: "Ventas del Dia",
-    value: "$487,250",
-    change: "+12.5%",
-    trend: "up",
-    icon: DollarSign,
-  },
-  {
-    title: "Transacciones",
-    value: "164",
-    change: "+8.2%",
-    trend: "up",
-    icon: ShoppingCart,
-  },
-  {
-    title: "Clientes Atendidos",
-    value: "142",
-    change: "-3.1%",
-    trend: "down",
-    icon: Users,
-  },
-  {
-    title: "Ticket Promedio",
-    value: "$2,971",
-    change: "+5.4%",
-    trend: "up",
-    icon: TrendingUp,
-  },
-]
 
 const recentAlerts = [
   {
@@ -75,48 +47,104 @@ const recentAlerts = [
 ]
 
 export function DashboardView() {
+  const { data, isLoading, error, refetch } = useDashboardMetrics();
+
+  // Error state
+  if (error && !isLoading) {
+    return <DashboardErrorState error={error} onRetry={refetch} />;
+  }
+
+  // Build alerts from real low stock data
+  const alerts = data?.lowStockItems.slice(0, 3).map((item, index) => ({
+    id: item.id,
+    type: "stock" as const,
+    message: `${item.name} - Stock crítico (${item.currentStock} unid. / min: ${item.minStock})`,
+    time: `Hace ${(index + 1) * 15} min`, // Mock time for now
+  })) || recentAlerts;
+
+  // Build stats from real data
+  const stats: StatCard[] = data ? [
+    {
+      title: "Ventas Totales",
+      value: formatCurrency(data.totalSales),
+      change: data.changeVsYesterday > 0 ? `+${data.changeVsYesterday.toFixed(1)}%` : `${data.changeVsYesterday.toFixed(1)}%`,
+      trend: data.changeVsYesterday >= 0 ? "up" : "down",
+      icon: DollarSign,
+    },
+    {
+      title: "Productos Bajo Stock",
+      value: formatNumber(data.lowStockCount),
+      icon: PackageMinus,
+    },
+    {
+      title: "Valor Inventario",
+      value: formatCurrency(data.inventoryValue),
+      change: data.inventoryChange > 0 ? `+${data.inventoryChange.toFixed(1)}%` : `${data.inventoryChange.toFixed(1)}%`,
+      trend: data.inventoryChange >= 0 ? "up" : "down",
+      icon: TrendingUp,
+    },
+    {
+      title: "Transacciones",
+      value: formatNumber(data.transactionCount),
+      change: data.changeVsYesterday > 0 ? `+${data.changeVsYesterday.toFixed(1)}%` : `${data.changeVsYesterday.toFixed(1)}%`,
+      trend: data.changeVsYesterday >= 0 ? "up" : "down",
+      icon: ShoppingCart,
+    },
+  ] : [];
+
   return (
     <div className="flex h-full flex-col gap-6">
       {/* Stats Grid */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {stats.map((stat) => (
-          <Card key={stat.title} className="border-border bg-card shadow-sm">
-            <CardContent className="p-5">
-              <div className="flex items-start justify-between">
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {stat.title}
-                  </span>
-                  <span className="font-mono text-2xl font-bold text-card-foreground">
-                    {stat.value}
-                  </span>
+        {isLoading ? (
+          <>
+            <MetricCardSkeleton />
+            <MetricCardSkeleton />
+            <MetricCardSkeleton />
+            <MetricCardSkeleton />
+          </>
+        ) : (
+          stats.map((stat) => (
+            <Card key={stat.title} className="border-border bg-card shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {stat.title}
+                    </span>
+                    <span className="font-mono text-2xl font-bold text-card-foreground">
+                      {stat.value}
+                    </span>
+                  </div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                    <stat.icon className="h-5 w-5 text-primary" />
+                  </div>
                 </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                  <stat.icon className="h-5 w-5 text-primary" />
-                </div>
-              </div>
-              <div className="mt-3 flex items-center gap-1.5">
-                {stat.trend === "up" ? (
-                  <ArrowUpRight className="h-3.5 w-3.5 text-success-foreground" />
-                ) : (
-                  <ArrowDownRight className="h-3.5 w-3.5 text-destructive" />
+                {stat.change && (
+                  <div className="mt-3 flex items-center gap-1.5">
+                    {stat.trend === "up" ? (
+                      <ArrowUpRight className="h-3.5 w-3.5 text-success-foreground" />
+                    ) : (
+                      <ArrowDownRight className="h-3.5 w-3.5 text-destructive" />
+                    )}
+                    <span
+                      className={`text-xs font-semibold ${
+                        stat.trend === "up"
+                          ? "text-success-foreground"
+                          : "text-destructive"
+                      }`}
+                    >
+                      {stat.change}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      vs. ayer
+                    </span>
+                  </div>
                 )}
-                <span
-                  className={`text-xs font-semibold ${
-                    stat.trend === "up"
-                      ? "text-success-foreground"
-                      : "text-destructive"
-                  }`}
-                >
-                  {stat.change}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  vs. ayer
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
 
       {/* Chart + Alerts Row */}
@@ -129,7 +157,7 @@ export function DashboardView() {
                 Ventas del Dia
               </CardTitle>
               <Badge variant="secondary" className="text-xs font-medium">
-                Hoy - 21 Feb 2026
+                Hoy - {new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })}
               </Badge>
             </div>
           </CardHeader>
@@ -144,12 +172,12 @@ export function DashboardView() {
             <CardTitle className="flex items-center gap-2 text-base font-semibold text-card-foreground">
               Alertas Criticas
               <Badge className="border-destructive/30 bg-destructive/10 text-destructive text-xs" variant="outline">
-                {recentAlerts.length}
+                {data?.lowStockCount || 0}
               </Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 pt-0">
-            {recentAlerts.map((alert) => (
+            {alerts.map((alert) => (
               <div
                 key={alert.id}
                 className="flex items-start gap-3 rounded-lg border border-border bg-background p-3"

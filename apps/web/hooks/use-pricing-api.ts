@@ -2,7 +2,10 @@
 
 import { useCallback } from 'react';
 import { apiClient } from '@/lib/api-client-instance';
-import type { PriceCalculation, PricingStrategy } from '@omnia/shared-types';
+import type { PriceCalculationResult, PricingStrategy } from '@omnia/shared-types';
+
+// Export the type alias for components
+export type PriceCalculation = PriceCalculationResult;
 
 /**
  * Pricing API Hook
@@ -27,30 +30,15 @@ export function usePricingAPI() {
   );
 
   const updateGlobalMarkup = useCallback(
-    async (percentage: number): Promise<void> => {
-      await apiClient.pricing.updateGlobalMarkup({ percentage });
-    }, 
-    []
-  );
-
-  const recalculateCategory = useCallback(
-    async (categoryId: string): Promise<number> => {
-      const result = await apiClient.pricing.recalculateCategoryPrices(categoryId);
-      return result.count;
+    async (markup: number): Promise<void> => {
+      await apiClient.pricing.updateGlobalMarkup({ markup });
     }, 
     []
   );
 
   const getPriceHistory = useCallback(
     async (productId: string, limit?: number) => {
-      return await apiClient.pricing.getPriceHistory(productId, limit);
-    },
-    []
-  );
-
-  const getStrategies = useCallback(
-    async (): Promise<PricingStrategy[]> => {
-      return await apiClient.pricing.getStrategies();
+      return await apiClient.pricing.getPriceHistory(productId);
     },
     []
   );
@@ -58,8 +46,6 @@ export function usePricingAPI() {
   return { 
     calculatePrice, 
     updateGlobalMarkup, 
-    recalculateCategory,
     getPriceHistory,
-    getStrategies,
   };
 }

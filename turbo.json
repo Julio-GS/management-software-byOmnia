@@ -6,11 +6,6 @@
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**", "out/**"]
     },
-    "build:electron": {
-      "dependsOn": ["^build"],
-      "outputs": ["out/**"],
-      "env": ["BUILD_MODE"]
-    },
     "dev": {
       "cache": false,
       "persistent": true

@@ -4,8 +4,12 @@ import { useCallback } from 'react';
 import { apiClient } from '@/lib/api-client-instance';
 import type { 
   InventoryMovement, 
-  CreateInventoryMovementRequest 
+  CreateMovementDto 
 } from '@omnia/shared-types';
+
+// Export the types for use in components
+export type CreateInventoryMovementRequest = CreateMovementDto;
+export type { InventoryMovement };
 
 /**
  * Inventory API Hook

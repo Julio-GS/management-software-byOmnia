@@ -12,18 +12,9 @@ import { Loader2 } from 'lucide-react';
 export function GlobalMarkupSettings() {
   const [markup, setMarkup] = useState(30);
   const [isLoading, setIsLoading] = useState(false);
-  const { updateGlobalMarkup, isAvailable } = usePricingAPI();
+  const { updateGlobalMarkup } = usePricingAPI();
 
   const handleSave = async () => {
-    if (!isAvailable) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Pricing API is only available in desktop app',
-      });
-      return;
-    }
-
     setIsLoading(true);
     try {
       await updateGlobalMarkup(markup);
@@ -41,17 +32,6 @@ export function GlobalMarkupSettings() {
       setIsLoading(false);
     }
   };
-
-  if (!isAvailable) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Global Markup</CardTitle>
-          <CardDescription>Feature only available in desktop app</CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
 
   return (
     <Card>

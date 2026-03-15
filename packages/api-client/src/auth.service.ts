@@ -60,6 +60,6 @@ export class AuthService {
    * Get current user profile
    */
   async getProfile(): Promise<User> {
-    return this.client.get<User>('/auth/profile');
+    return this.client.get<User>('/auth/me');
   }
 }

@@ -115,6 +115,21 @@ export class ProductsRepository {
   }
 
   /**
+   * Calculate total inventory value (price * stock for all active products).
+   * @returns Total inventory value
+   */
+  async getTotalInventoryValue(): Promise<number> {
+    const result = await this.prisma.$queryRaw<Array<{ total: any }>>`
+      SELECT COALESCE(SUM(price * stock), 0) as total
+      FROM products
+      WHERE "isActive" = true
+    `;
+
+    // Convert Decimal to number
+    return Number(result[0]?.total || 0);
+  }
+
+  /**
    * Create a new product.
    * @throws ConflictException if SKU or barcode already exists
    */

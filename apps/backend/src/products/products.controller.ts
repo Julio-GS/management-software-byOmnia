@@ -56,12 +56,21 @@ export class ProductsController {
     return this.productsService.findAll({ categoryId, isActive, search });
   }
 
-  @Get('low-stock')
-  @Roles('manager', 'admin')
-  @ApiOperation({ summary: 'Get products with low stock' })
-  @ApiResponse({ status: 200, description: 'Low stock products retrieved successfully' })
-  getLowStockProducts() {
-    return this.productsService.getLowStockProducts();
+  @Get('total-value')
+  @Roles('cashier', 'manager', 'admin')
+  @ApiOperation({ summary: 'Get total inventory value' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Total inventory value retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        totalValue: { type: 'number', example: 125430.50 }
+      }
+    }
+  })
+  getTotalInventoryValue() {
+    return this.productsService.getTotalInventoryValue();
   }
 
   @Get('sku/:sku')

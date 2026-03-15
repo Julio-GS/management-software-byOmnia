@@ -1,141 +1,53 @@
-import { useState, useEffect } from 'react';
+"use client"
 
-export interface SalesSummary {
-  totalSales: number;
-  totalRevenue: number;
-  productsSold: number;
-  avgTransactionValue: number;
-  changeVsYesterday: number;
+import { useState, useEffect, useCallback } from "react"
+import type { DashboardMetrics } from "@omnia/shared-types"
+import { apiClient } from "@/lib/api-client-instance"
+
+interface UseDashboardMetricsReturn {
+  data: DashboardMetrics | null;
+  isLoading: boolean;
+  error: Error | null;
+  refetch: () => Promise<void>;
 }
 
-export interface TopProduct {
-  id: string;
-  name: string;
-  quantitySold: number;
-  revenue: number;
-}
+/**
+ * Custom hook to fetch dashboard metrics
+ * 
+ * Aggregates data from 4 API endpoints:
+ * - GET /reports/sales-summary → totalSales
+ * - GET /reports/low-stock → lowStockCount
+ * - GET /reports/top-products → topProducts[]
+ * - GET /products/total-value → inventoryValue
+ */
+export function useDashboardMetrics(): UseDashboardMetricsReturn {
+  const [data, setData] = useState<DashboardMetrics | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
-export interface LowStockProduct {
-  id: string;
-  name: string;
-  currentStock: number;
-  minStock: number;
-  categoryName?: string;
-}
+  const fetchMetrics = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
 
-export interface StockRotation {
-  productId: string;
-  productName: string;
-  averageDailySales: number;
-  currentStock: number;
-  daysUntilStockout: number;
-  rotationRate: number;
-}
-
-export interface RevenueByCategory {
-  categoryId: string;
-  categoryName: string;
-  revenue: number;
-  salesCount: number;
-  percentage: number;
-}
-
-export interface SalesTrend {
-  date: string;
-  sales: number;
-  revenue: number;
-  productsSold: number;
-}
-
-export interface DashboardMetrics {
-  summary: SalesSummary | null;
-  topProducts: TopProduct[];
-  lowStock: LowStockProduct[];
-  stockRotation: StockRotation[];
-  revenueByCategory: RevenueByCategory[];
-  salesTrends: SalesTrend[];
-}
-
-export function useDashboardMetrics(refreshInterval: number = 30000) {
-  const [metrics, setMetrics] = useState<DashboardMetrics>({
-    summary: null,
-    topProducts: [],
-    lowStock: [],
-    stockRotation: [],
-    revenueByCategory: [],
-    salesTrends: [],
-  });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchMetrics = async () => {
     try {
-      setLoading(true);
-      setError(null);
-
-      // Check if we're in Electron environment
-      if (typeof window !== 'undefined' && window.electron) {
-        // Fetch all metrics in parallel
-        const [summary, topProducts, lowStock, stockRotation, revenueByCategory, salesTrends] =
-          await Promise.all([
-            window.electron.invoke('api:get', '/reports/sales-summary?period=today'),
-            window.electron.invoke('api:get', '/reports/top-products?limit=5'),
-            window.electron.invoke('api:get', '/reports/low-stock'),
-            window.electron.invoke('api:get', '/reports/stock-rotation'),
-            window.electron.invoke('api:get', '/reports/revenue-by-category'),
-            window.electron.invoke('api:get', '/reports/sales-trends?days=7'),
-          ]);
-
-        setMetrics({
-          summary: summary || null,
-          topProducts: topProducts || [],
-          lowStock: lowStock || [],
-          stockRotation: stockRotation || [],
-          revenueByCategory: revenueByCategory || [],
-          salesTrends: salesTrends || [],
-        });
-      } else {
-        // Fallback for web environment (fetch from API directly)
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-
-        const [summary, topProducts, lowStock, stockRotation, revenueByCategory, salesTrends] =
-          await Promise.all([
-            fetch(`${baseUrl}/reports/sales-summary?period=today`).then((r) => r.json()),
-            fetch(`${baseUrl}/reports/top-products?limit=5`).then((r) => r.json()),
-            fetch(`${baseUrl}/reports/low-stock`).then((r) => r.json()),
-            fetch(`${baseUrl}/reports/stock-rotation`).then((r) => r.json()),
-            fetch(`${baseUrl}/reports/revenue-by-category`).then((r) => r.json()),
-            fetch(`${baseUrl}/reports/sales-trends?days=7`).then((r) => r.json()),
-          ]);
-
-        setMetrics({
-          summary,
-          topProducts,
-          lowStock,
-          stockRotation,
-          revenueByCategory,
-          salesTrends,
-        });
-      }
+      const metrics = await apiClient.dashboard.getMetrics();
+      setData(metrics);
     } catch (err) {
-      console.error('Error fetching dashboard metrics:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch metrics');
+      console.error('[useDashboardMetrics] Error fetching dashboard metrics:', err);
+      setError(err instanceof Error ? err : new Error('Failed to fetch dashboard metrics'));
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    // Initial fetch
     fetchMetrics();
+  }, [fetchMetrics]);
 
-    // Set up auto-refresh interval
-    const interval = setInterval(() => {
-      fetchMetrics();
-    }, refreshInterval);
-
-    return () => clearInterval(interval);
-  }, [refreshInterval]);
-
-  return { metrics, loading, error, refresh: fetchMetrics };
+  return {
+    data,
+    isLoading,
+    error,
+    refetch: fetchMetrics,
+  };
 }

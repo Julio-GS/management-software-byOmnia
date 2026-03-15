@@ -13,3 +13,4 @@ export * from './sale.types';
 // Reports and sync
 export * from './report.types';
 export * from './sync.types';
+export * from './dashboard.types';

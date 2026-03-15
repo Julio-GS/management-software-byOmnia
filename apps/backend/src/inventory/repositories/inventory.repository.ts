@@ -186,4 +186,20 @@ export class InventoryRepository {
 
     return product.stock;
   }
+
+  /**
+   * Get products with low stock (below minimum threshold).
+   * Products are considered "low stock" when: stock <= minStock
+   * @param threshold Optional custom threshold to use instead of minStock
+   */
+  async getLowStockProducts(threshold?: number): Promise<Product[]> {
+    // Use raw SQL for this query since Prisma doesn't support column comparisons
+    const query = threshold !== undefined
+      ? `SELECT * FROM products WHERE stock <= $1 AND "isActive" = true ORDER BY stock ASC`
+      : `SELECT * FROM products WHERE stock <= "minStock" AND "isActive" = true ORDER BY stock ASC`;
+
+    const params = threshold !== undefined ? [threshold] : [];
+    
+    return this.prisma.$queryRawUnsafe<Product[]>(query, ...params);
+  }
 }

@@ -21,11 +21,9 @@ export function MovementHistoryTable({ productId, productName }: MovementHistory
   const [isLoading, setIsLoading] = useState(true);
   const [filterType, setFilterType] = useState<'ALL' | 'ENTRY' | 'EXIT' | 'ADJUSTMENT'>('ALL');
   
-  const { getMovements, isAvailable } = useInventoryAPI();
+  const { getMovements } = useInventoryAPI();
 
   useEffect(() => {
-    if (!isAvailable) return;
-
     const loadMovements = async () => {
       setIsLoading(true);
       try {
@@ -44,7 +42,7 @@ export function MovementHistoryTable({ productId, productName }: MovementHistory
     };
 
     loadMovements();
-  }, [productId, filterType, isAvailable, getMovements]);
+  }, [productId, filterType, getMovements]);
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -67,20 +65,6 @@ export function MovementHistoryTable({ productId, productName }: MovementHistory
     };
     return <Badge variant={variants[type] || 'default'}>{type}</Badge>;
   };
-
-  if (!isAvailable) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <History className="h-5 w-5" />
-            Movement History
-          </CardTitle>
-          <CardDescription>Feature only available in desktop app</CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
 
   return (
     <Card>

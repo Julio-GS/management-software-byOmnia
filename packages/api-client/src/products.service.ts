@@ -4,6 +4,7 @@ import type {
   CreateProductDto,
   UpdateProductDto,
   PaginatedResponse,
+  InventoryValueResponse,
 } from '@omnia/shared-types';
 
 export interface ProductFilters {
@@ -84,11 +85,9 @@ export class ProductsService {
   }
 
   /**
-   * Get products with low stock
+   * Get total inventory value (sum of price * stock for all active products)
    */
-  async getLowStock(threshold?: number): Promise<Product[]> {
-    return this.client.get<Product[]>('/products/low-stock', {
-      params: { threshold },
-    });
+  async getTotalValue(): Promise<InventoryValueResponse> {
+    return this.client.get<InventoryValueResponse>('/products/total-value');
   }
 }

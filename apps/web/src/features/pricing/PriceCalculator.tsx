@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
+import { Product } from '@omnia/shared-types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
@@ -8,15 +9,23 @@ import { Label } from '@/shared/components/ui/label';
 import { Separator } from '@/shared/components/ui/separator';
 import { toast } from '@/hooks/use-toast';
 import { usePricingAPI, PriceCalculation } from '@/hooks/use-pricing-api';
-import { ProductPicker } from '@/shared/components/forms/ProductPicker';
+import { ProductPicker } from '@/shared/components/product-picker';
 import { Calculator, Loader2 } from 'lucide-react';
 
 export function PriceCalculator() {
-  const [productId, setProductId] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [cost, setCost] = useState('');
   const [result, setResult] = useState<PriceCalculation | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const { calculatePrice } = usePricingAPI();
+
+  // Auto-fill cost when product is selected
+  const handleProductSelect = (product: Product | null) => {
+    setSelectedProduct(product);
+    if (product) {
+      setCost(product.cost.toString());
+    }
+  };
 
   const handleCalculate = async (e: FormEvent) => {
     e.preventDefault();
@@ -50,13 +59,18 @@ export function PriceCalculator() {
     <div className="space-y-4">
       <form onSubmit={handleCalculate} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="product">Product (Optional)</Label>
-          <ProductPicker 
-            value={productId} 
-            onValueChange={setProductId}
-            disabled={isCalculating}
-            placeholder="Select product for reference..."
+          <Label htmlFor="product">Producto (Opcional)</Label>
+          <ProductPicker
+            selectedProduct={selectedProduct}
+            onSelectProduct={handleProductSelect}
+            placeholder="Seleccionar producto para usar su costo..."
+            showDetails={true}
           />
+          {selectedProduct && (
+            <p className="text-xs text-muted-foreground">
+              Costo actual del producto: ${selectedProduct.cost.toFixed(2)}
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">

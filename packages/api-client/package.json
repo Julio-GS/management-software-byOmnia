@@ -1,7 +1,7 @@
 {
   "name": "@omnia/api-client",
   "version": "1.0.0",
-  "description": "Unified API client for OMNIA Management System - works in both web and desktop environments",
+  "description": "Unified API client for OMNIA Management System",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

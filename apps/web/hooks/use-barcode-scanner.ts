@@ -24,7 +24,7 @@ export function useBarcodeScanner(
   } = options;
 
   const bufferRef = useRef('');
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const handleKeyPress = useCallback(
     (e: KeyboardEvent) => {

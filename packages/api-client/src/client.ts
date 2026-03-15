@@ -5,7 +5,6 @@ export interface ApiClientConfig {
   timeout?: number;
   getToken?: () => Promise<string | null>;
   onUnauthorized?: () => void;
-  environment?: 'web' | 'desktop';
 }
 
 export class ApiClient {
@@ -14,13 +13,6 @@ export class ApiClient {
 
   constructor(config: ApiClientConfig) {
     this.config = config;
-
-    // Auto-detect environment if not specified
-    if (!config.environment) {
-      const hasWindow = typeof window !== 'undefined';
-      const hasElectron = hasWindow && 'electron' in (window as any);
-      config.environment = hasElectron ? 'desktop' : 'web';
-    }
 
     this.axios = axios.create({
       baseURL: config.baseURL,

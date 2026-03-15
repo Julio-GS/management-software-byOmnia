@@ -152,6 +152,14 @@ export class InventoryService {
   }
 
   /**
+   * Get products with low stock (below minimum threshold).
+   * @param threshold Optional custom threshold (defaults to product's minStock value)
+   */
+  async getLowStockProducts(threshold?: number) {
+    return this.repository.getLowStockProducts(threshold);
+  }
+
+  /**
    * Map MovementType to event type string.
    */
   private mapMovementTypeToEventType(type: MovementType): 'IN' | 'OUT' | 'ADJUSTMENT' {

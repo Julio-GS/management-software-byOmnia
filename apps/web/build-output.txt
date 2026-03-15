@@ -1,0 +1,110 @@
+
+> @omnia/web@0.1.0 build C:\Users\olyce\Documents\Trabajos Omnia\Proyecto supermercado\management-software-byOmnia\apps\web
+> next build
+
+▲ Next.js 16.1.6 (Turbopack)
+- Environments: .env
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 2.1s
+  Skipping validation of types
+  Collecting page data using 23 workers ...
+  Generating static pages using 23 workers (0/6) ...
+🔍 [api-client-instance] Module loaded
+🔍 [api-client-instance] OmniaApiClient: [class bZ]
+🔍 [api-client-instance] typeof OmniaApiClient: function
+🔍 [api-client-instance] Creating apiClient...
+🔍 [api-client-instance] Config: {
+  baseURL: 'http://localhost:8080/api/v1',
+  hasGetToken: true,
+  hasOnUnauthorized: true,
+  environment: 'web'
+}
+🔍 [api-client-instance] apiClient created: bZ {
+  client: bQ {
+    config: {
+      baseURL: 'http://localhost:8080/api/v1',
+      getToken: [AsyncFunction: b0],
+      onUnauthorized: [AsyncFunction: b1],
+      environment: 'web'
+    },
+    axios: [Function (anonymous)] {
+      constructor: [Function (anonymous)],
+      request: [Function (anonymous)],
+      _request: [Function (anonymous)],
+      getUri: [Function (anonymous)],
+      delete: [Function (anonymous)],
+      get: [Function (anonymous)],
+      head: [Function (anonymous)],
+      options: [Function (anonymous)],
+      post: [Function (anonymous)],
+      postForm: [Function (anonymous)],
+      put: [Function (anonymous)],
+      putForm: [Function (anonymous)],
+      patch: [Function (anonymous)],
+      patchForm: [Function (anonymous)],
+      defaults: [Object],
+      interceptors: [Object],
+      create: [Function (anonymous)]
+    }
+  },
+  auth: bR { client: bQ { config: [Object], axios: [Function] } },
+  products: bS { client: bQ { config: [Object], axios: [Function] } },
+  categories: bT { client: bQ { config: [Object], axios: [Function] } },
+  inventory: bU { client: bQ { config: [Object], axios: [Function] } },
+  pricing: bV { client: bQ { config: [Object], axios: [Function] } },
+  sales: bW { client: bQ { config: [Object], axios: [Function] } },
+  reports: bX { client: bQ { config: [Object], axios: [Function] } },
+  sync: bY { client: bQ { config: [Object], axios: [Function] } }
+}
+🔍 [api-client-instance] apiClient.auth: bR {
+  client: bQ {
+    config: {
+      baseURL: 'http://localhost:8080/api/v1',
+      getToken: [AsyncFunction: b0],
+      onUnauthorized: [AsyncFunction: b1],
+      environment: 'web'
+    },
+    axios: [Function (anonymous)] {
+      constructor: [Function (anonymous)],
+      request: [Function (anonymous)],
+      _request: [Function (anonymous)],
+      getUri: [Function (anonymous)],
+      delete: [Function (anonymous)],
+      get: [Function (anonymous)],
+      head: [Function (anonymous)],
+      options: [Function (anonymous)],
+      post: [Function (anonymous)],
+      postForm: [Function (anonymous)],
+      put: [Function (anonymous)],
+      putForm: [Function (anonymous)],
+      patch: [Function (anonymous)],
+      patchForm: [Function (anonymous)],
+      defaults: [Object],
+      interceptors: [Object],
+      create: [Function (anonymous)]
+    }
+  }
+}
+🔍 [api-client-instance] typeof apiClient.auth: object
+🔍 [api-client-instance] apiClient.auth.login: [AsyncFunction: login]
+🔍 [api-client-instance] typeof apiClient.auth.login: function
+  Generating static pages using 23 workers (1/6) 
+  Generating static pages using 23 workers (2/6) 
+  Generating static pages using 23 workers (4/6) 
+✓ Generating static pages using 23 workers (6/6) in 439.1ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /features-demo
+├ ○ /login
+└ ○ /pricing
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)  prerendered as static content
+

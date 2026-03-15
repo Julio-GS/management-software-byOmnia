@@ -176,4 +176,12 @@ export class ProductsService {
     const products = await this.repository.findLowStock();
     return products.map((p) => p.toJSON());
   }
+
+  /**
+   * Get total inventory value (sum of price * stock for all active products).
+   */
+  async getTotalInventoryValue(): Promise<{ totalValue: number }> {
+    const totalValue = await this.repository.getTotalInventoryValue();
+    return { totalValue };
+  }
 }

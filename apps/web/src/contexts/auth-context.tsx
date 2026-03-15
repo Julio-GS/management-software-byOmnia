@@ -10,7 +10,6 @@ import React, {
 import { useRouter } from "next/navigation";
 import type { User, LoginRequest } from "@omnia/shared-types";
 import { apiClient, tokenStorage } from "@/lib/api-client-instance";
-import { isElectron, isElectronAuthenticated } from "@/lib/electron";
 
 interface AuthContextType {
   user: User | null;
@@ -33,34 +32,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Fetch current user on mount
   const fetchUser = useCallback(async () => {
-    // If running in Electron, try to get auth from Electron first
-    if (isElectron()) {
-      try {
-        const electronAuth = await isElectronAuthenticated();
-
-        if (
-          electronAuth.isAuthenticated &&
-          electronAuth.user &&
-          electronAuth.token
-        ) {
-          console.log("✅ Electron auto-auth successful");
-
-          // Store the token from Electron in web storage
-          // Note: Electron token is refresh_token, we need to get access_token
-          // For now, we'll just set the user and let the app work
-          setUser(electronAuth.user);
-          setIsLoading(false);
-          setHasInitialized(true);
-          return;
-        }
-      } catch (error) {
-        console.warn(
-          "Failed to get Electron auth, falling back to web auth:",
-          error,
-        );
-      }
-    }
-
     // Standard web auth flow
     const hasToken = !!tokenStorage.getAccessToken();
 

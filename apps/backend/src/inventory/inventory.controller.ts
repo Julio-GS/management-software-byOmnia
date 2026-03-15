@@ -62,6 +62,15 @@ export class InventoryController {
     return this.inventoryService.getAllMovements(params);
   }
 
+  @Get('low-stock')
+  @Roles('manager', 'admin')
+  @ApiOperation({ summary: 'Get products with low stock' })
+  @ApiQuery({ name: 'threshold', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Low stock products retrieved successfully' })
+  getLowStockProducts(@Query('threshold') threshold?: number) {
+    return this.inventoryService.getLowStockProducts(threshold);
+  }
+
   @Get('movements/:productId')
   @Roles('manager', 'admin')
   @ApiOperation({ summary: 'Get inventory movement history for a product' })

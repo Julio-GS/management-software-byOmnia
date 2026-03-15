@@ -7,27 +7,19 @@ import { PricingService } from './pricing.service.js';
 import { SalesService } from './sales.service.js';
 import { ReportsService } from './reports.service.js';
 import { SyncService } from './sync.service.js';
+import { DashboardService } from './dashboard.service.js';
 
 /**
  * Main API client for OMNIA Management System
  * 
- * Auto-detects environment (web vs desktop) and provides unified interface
- * to all backend services.
+ * Provides unified interface to all backend services.
  * 
  * @example
  * ```typescript
- * // Web usage
  * const client = new OmniaApiClient({
  *   baseURL: 'http://localhost:3001/api/v1',
  *   getToken: async () => localStorage.getItem('access_token'),
  *   onUnauthorized: () => router.push('/login')
- * });
- * 
- * // Desktop usage
- * const client = new OmniaApiClient({
- *   baseURL: process.env.API_URL,
- *   getToken: async () => getStoredTokens()?.access_token || null,
- *   environment: 'desktop'
  * });
  * 
  * // Use services
@@ -44,6 +36,7 @@ export class OmniaApiClient {
   public sales: SalesService;
   public reports: ReportsService;
   public sync: SyncService;
+  public dashboard: DashboardService;
 
   private client: ApiClient;
 
@@ -59,6 +52,7 @@ export class OmniaApiClient {
     this.sales = new SalesService(this.client);
     this.reports = new ReportsService(this.client);
     this.sync = new SyncService(this.client);
+    this.dashboard = new DashboardService(this.client);
   }
 
   /**
@@ -81,6 +75,7 @@ export { PricingService } from './pricing.service.js';
 export { SalesService } from './sales.service.js';
 export { ReportsService } from './reports.service.js';
 export { SyncService } from './sync.service.js';
+export { DashboardService } from './dashboard.service.js';
 
 // Re-export shared types for convenience
 export * from '@omnia/shared-types';

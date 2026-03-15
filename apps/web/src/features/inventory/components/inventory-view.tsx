@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card"
 import { Badge } from "@/shared/components/ui/badge"
 import { Button } from "@/shared/components/ui/button"
@@ -38,7 +38,11 @@ import {
   Pencil,
   Check,
   X,
+  Plus,
 } from "lucide-react"
+import { InventoryMovementForm } from "../InventoryMovementForm"
+import { apiClient } from "@/lib/api-client-instance"
+import type { Product } from "@omnia/shared-types"
 
 interface ExpiringProduct {
   id: string
@@ -56,6 +60,28 @@ interface LowStockProduct {
   unit: string
 }
 
+interface StockAdjustment {
+  itemId: string
+  name: string
+  currentStock: number
+  newStock: number
+}
+
+// Map Product to InventoryItem with computed status
+function productToInventoryItem(product: Product): InventoryItem {
+  const status = getStatus(product.stock, product.minStock)
+  return {
+    id: product.id,
+    name: product.name,
+    sku: product.sku || 'N/A',
+    category: product.categoryId || 'Sin Categoría',
+    stock: product.stock,
+    minStock: product.minStock,
+    price: product.price,
+    status,
+  }
+}
+
 interface InventoryItem {
   id: string
   name: string
@@ -67,40 +93,11 @@ interface InventoryItem {
   status: "ok" | "low" | "critical"
 }
 
-interface StockAdjustment {
-  itemId: string
-  name: string
-  currentStock: number
-  newStock: number
-}
-
+// Mock data for features not yet implemented (expiring products)
 const expiringProducts: ExpiringProduct[] = [
   { id: "1", name: "Yogurt Natural Activia 200g", expiryDate: "23/02/2026", daysLeft: 2, stock: 15 },
   { id: "2", name: "Queso Cremoso La Paulina 1kg", expiryDate: "25/02/2026", daysLeft: 4, stock: 8 },
   { id: "3", name: "Leche Descremada Sancor 1L", expiryDate: "27/02/2026", daysLeft: 6, stock: 22 },
-]
-
-const lowStockProducts: LowStockProduct[] = [
-  { id: "1", name: "Aceite Girasol Cocinero 1.5L", currentStock: 3, minStock: 20, unit: "unid." },
-  { id: "2", name: "Arroz Largo Fino Gallo 1kg", currentStock: 5, minStock: 30, unit: "unid." },
-  { id: "3", name: "Harina 000 Blancaflor 1kg", currentStock: 4, minStock: 25, unit: "unid." },
-  { id: "4", name: "Azucar Ledesma 1kg", currentStock: 7, minStock: 35, unit: "unid." },
-  { id: "5", name: "Sal Fina Celusal 500g", currentStock: 2, minStock: 15, unit: "unid." },
-]
-
-const initialInventory: InventoryItem[] = [
-  { id: "1", name: "Leche Entera La Serenisima 1L", sku: "LCH-001", category: "Lacteos", stock: 145, minStock: 50, price: 1250, status: "ok" },
-  { id: "2", name: "Pan Lactal Bimbo 500g", sku: "PAN-012", category: "Panificados", stock: 38, minStock: 20, price: 2100, status: "ok" },
-  { id: "3", name: "Aceite Girasol Cocinero 1.5L", sku: "ACE-003", category: "Aceites", stock: 3, minStock: 20, price: 3450, status: "critical" },
-  { id: "4", name: "Fideos Matarazzo Spaghetti 500g", sku: "FID-045", category: "Pastas", stock: 67, minStock: 30, price: 1890, status: "ok" },
-  { id: "5", name: "Yogurt Natural Activia 200g", sku: "YOG-022", category: "Lacteos", stock: 15, minStock: 20, price: 980, status: "low" },
-  { id: "6", name: "Arroz Largo Fino Gallo 1kg", sku: "ARR-007", category: "Granos", stock: 5, minStock: 30, price: 1650, status: "critical" },
-  { id: "7", name: "Galletitas Bagley Traviata 303g", sku: "GAL-088", category: "Galletitas", stock: 92, minStock: 40, price: 1420, status: "ok" },
-  { id: "8", name: "Azucar Ledesma 1kg", sku: "AZU-011", category: "Basicos", stock: 7, minStock: 35, price: 1180, status: "critical" },
-  { id: "9", name: "Harina 000 Blancaflor 1kg", sku: "HAR-015", category: "Basicos", stock: 4, minStock: 25, price: 890, status: "critical" },
-  { id: "10", name: "Sal Fina Celusal 500g", sku: "SAL-009", category: "Basicos", stock: 2, minStock: 15, price: 650, status: "critical" },
-  { id: "11", name: "Queso Cremoso La Paulina 1kg", sku: "QUE-033", category: "Lacteos", stock: 18, minStock: 15, price: 5200, status: "ok" },
-  { id: "12", name: "Coca-Cola 2.25L", sku: "BEB-101", category: "Bebidas", stock: 56, minStock: 30, price: 2350, status: "ok" },
 ]
 
 function formatCurrency(amount: number): string {
@@ -139,16 +136,60 @@ function StatusBadge({ status }: { status: "ok" | "low" | "critical" }) {
   )
 }
 
-const allCategories = Array.from(new Set(initialInventory.map((i) => i.category))).sort()
-
 export function InventoryView() {
-  const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory)
+  const [inventory, setInventory] = useState<InventoryItem[]>([])
+  const [lowStockProducts, setLowStockProducts] = useState<LowStockProduct[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showStockDialog, setShowStockDialog] = useState(false)
+  const [showMovementDialog, setShowMovementDialog] = useState(false)
   const [adjustments, setAdjustments] = useState<StockAdjustment[]>([])
+
+  // Load products from API
+  useEffect(() => {
+    loadProducts()
+    loadLowStockProducts()
+  }, [])
+
+  const loadProducts = async () => {
+    try {
+      setIsLoading(true)
+      const response = await apiClient.products.getAll({}, { limit: 1000 })
+      // Backend returns plain array, not PaginatedResponse (type mismatch)
+      const products = Array.isArray(response) ? response : (response as any).items || []
+      const items = products.map(productToInventoryItem)
+      setInventory(items)
+    } catch (error) {
+      console.error('Error loading products:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const loadLowStockProducts = async () => {
+    try {
+      const products = await apiClient.inventory.getLowStock()
+      setLowStockProducts(
+        products.map((p) => ({
+          id: p.id,
+          name: p.name,
+          currentStock: p.stock,
+          minStock: p.minStock,
+          unit: "unid.",
+        }))
+      )
+    } catch (error) {
+      console.error('Error loading low stock products:', error)
+    }
+  }
+
+  const allCategories = useMemo(
+    () => Array.from(new Set(inventory.map((i) => i.category))).sort(),
+    [inventory]
+  )
 
   const filteredItems = useMemo(() => {
     return inventory.filter((item) => {
@@ -226,6 +267,23 @@ export function InventoryView() {
   }
 
   const hasChanges = adjustments.some((adj) => adj.newStock !== adj.currentStock)
+
+  const handleMovementSuccess = () => {
+    setShowMovementDialog(false)
+    loadProducts() // Reload products after movement
+    loadLowStockProducts() // Reload low stock alert
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4" />
+          <p className="text-sm text-muted-foreground">Cargando inventario...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-full flex-col gap-6">
@@ -313,13 +371,25 @@ export function InventoryView() {
       <Card className="flex flex-1 flex-col border-border bg-card shadow-sm overflow-hidden">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2 text-base font-semibold text-card-foreground">
+            <div className="flex items-center gap-2">
               <Package className="h-[18px] w-[18px]" />
-              Inventario General
-            </CardTitle>
-            <Badge variant="secondary" className="font-mono text-xs">
-              {filteredItems.length} de {inventory.length} productos
-            </Badge>
+              <CardTitle className="text-base font-semibold text-card-foreground">
+                Inventario General
+              </CardTitle>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="font-mono text-xs">
+                {filteredItems.length} de {inventory.length} productos
+              </Badge>
+              <Button
+                onClick={() => setShowMovementDialog(true)}
+                size="sm"
+                className="h-8 gap-2 bg-primary text-primary-foreground"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Crear Movimiento
+              </Button>
+            </div>
           </div>
 
           {/* Search and Filters */}
@@ -546,6 +616,23 @@ export function InventoryView() {
               Aplicar Cambios
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Movement Dialog */}
+      <Dialog open={showMovementDialog} onOpenChange={setShowMovementDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-card-foreground">
+              <Plus className="h-4 w-4" />
+              Crear Movimiento de Inventario
+            </DialogTitle>
+            <DialogDescription>
+              Registra una entrada, salida o ajuste de inventario
+            </DialogDescription>
+          </DialogHeader>
+          
+          <InventoryMovementForm onSuccess={handleMovementSuccess} />
         </DialogContent>
       </Dialog>
     </div>

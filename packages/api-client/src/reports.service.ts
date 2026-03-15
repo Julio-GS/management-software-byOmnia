@@ -1,5 +1,10 @@
 import { ApiClient } from './client.js';
-import type { SalesSummaryRequest, SalesSummaryResponse } from '@omnia/shared-types';
+import type { 
+  SalesSummaryRequest, 
+  SalesSummaryResponse,
+  LowStockReportItem,
+  ProductPerformanceReport 
+} from '@omnia/shared-types';
 
 export class ReportsService {
   constructor(private client: ApiClient) {}
@@ -27,6 +32,31 @@ export class ReportsService {
     return this.client.get<any[]>('/reports/top-products', {
       params: { startDate, endDate, limit },
     });
+  }
+
+  /**
+   * Get top selling products (simplified - no date params)
+   */
+  async getTopProductsSimple(limit: number = 10): Promise<ProductPerformanceReport[]> {
+    return this.client.get<ProductPerformanceReport[]>('/reports/top-products', {
+      params: { limit },
+    });
+  }
+
+  /**
+   * Get sales summary (simplified - defaults to today)
+   */
+  async getSalesSummarySimple(): Promise<SalesSummaryResponse> {
+    return this.client.get<SalesSummaryResponse>('/reports/sales-summary', {
+      params: { period: 'today' },
+    });
+  }
+
+  /**
+   * Get low stock products
+   */
+  async getLowStock(): Promise<LowStockReportItem[]> {
+    return this.client.get<LowStockReportItem[]>('/reports/low-stock');
   }
 
   /**

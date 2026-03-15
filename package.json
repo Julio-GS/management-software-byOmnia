@@ -8,20 +8,16 @@
   ],
   "scripts": {
     "dev": "turbo run dev",
-    "dev:desktop": "concurrently \"pnpm --filter @omnia/web dev\" \"wait-on http://localhost:3000 && pnpm --filter @omnia/desktop dev\"",
     "build": "turbo run build",
-    "build:desktop": "pnpm --filter @omnia/web build:electron && pnpm --filter @omnia/desktop build",
     "start": "turbo run start",
     "lint": "turbo run lint",
     "clean": "turbo run clean && rm -rf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
-    "concurrently": "^8.2.2",
     "prettier": "^3.2.5",
     "tsx": "^4.21.0",
-    "turbo": "^2.3.3",
-    "wait-on": "^7.2.0"
+    "turbo": "^2.3.3"
   },
   "engines": {
     "node": ">=18.0.0",
