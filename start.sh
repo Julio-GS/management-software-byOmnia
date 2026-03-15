@@ -22,16 +22,16 @@ npx prisma migrate deploy || echo "⚠️  Migration warning (might be initial s
 cd /app
 
 # Start backend service in background
-echo "🔧 Starting backend service on port 3001..."
+echo "🔧 Starting backend service on port 8080..."
 cd /app/apps/backend
-node dist/main.js &
+PORT=8080 node dist/main.js &
 BACKEND_PID=$!
 echo "✅ Backend started (PID: $BACKEND_PID)"
 
 # Wait for backend to be ready
 echo "⏳ Waiting for backend to be ready..."
 for i in {1..30}; do
-    if curl -f http://localhost:3001/health > /dev/null 2>&1; then
+    if curl -f http://localhost:8080/api/v1/health > /dev/null 2>&1; then
         echo "✅ Backend is ready"
         break
     fi
