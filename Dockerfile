@@ -41,19 +41,12 @@ COPY apps/backend ./apps/backend
 COPY packages/shared-types ./packages/shared-types
 COPY packages/api-client ./packages/api-client
 
-# Generate Prisma Client FIRST (before build)
-WORKDIR /app/apps/backend
-RUN npx prisma generate
-WORKDIR /app
-
 # Build shared packages FIRST (explicit order)
 RUN pnpm --filter @omnia/shared-types build
 RUN pnpm --filter @omnia/api-client build
 
-# Then build backend (use nest directly to avoid prebuild script)
-WORKDIR /app/apps/backend
-RUN npx nest build
-WORKDIR /app
+# Then build backend (prebuild will run prisma generate automatically)
+RUN pnpm --filter @omnia/backend build
 
 # Stage 3: Production Runner
 FROM node:20-alpine AS runner

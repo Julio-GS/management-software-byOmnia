@@ -4,7 +4,7 @@
   "description": "Omnia Management System Backend - NestJS API",
   "main": "dist/main.js",
   "scripts": {
-    "prebuild": "prisma generate",
+    "prebuild": "prisma generate --schema=./prisma/schema.prisma",
     "build": "nest build",
     "dev": "cross-env NODE_OPTIONS=\"--no-experimental-detect-module\" nest start --watch",
     "format": "prettier --write \"src/**/*.ts\"",
