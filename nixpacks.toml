@@ -1,0 +1,12 @@
+# Railway Monorepo Config
+# Railway detecta este archivo automáticamente
+
+[phases.setup]
+nixPkgs = ['nodejs-20_x', 'pnpm']
+
+[phases.install]
+cmds = ['pnpm install --frozen-lockfile']
+
+[start]
+# Este no se usa cuando tenemos Dockerfiles, pero lo dejamos para referencia
+cmd = 'echo "Using Dockerfile build"'
