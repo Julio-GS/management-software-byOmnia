@@ -1,0 +1,107 @@
+# ==========================================
+# Frontend Dockerfile (Next.js)
+# ==========================================
+# Optimized for Railway deployment with PNPM
+# Port: 3000
+
+# Stage 1: Dependencies
+FROM node:20-alpine AS deps
+RUN apk add --no-cache libc6-compat
+RUN corepack enable && corepack prepare pnpm@10.26.2 --activate
+
+WORKDIR /app
+
+# Copy workspace root files
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json ./
+
+# Copy all package.json files (including shared packages)
+COPY apps/web/package.json ./apps/web/
+COPY packages/shared-types/package.json ./packages/shared-types/
+COPY packages/api-client/package.json ./packages/api-client/
+
+# Install ALL dependencies
+RUN pnpm install --frozen-lockfile
+
+# Stage 2: Builder
+FROM node:20-alpine AS builder
+RUN apk add --no-cache libc6-compat
+RUN corepack enable && corepack prepare pnpm@10.26.2 --activate
+
+WORKDIR /app
+
+# Copy dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY --from=deps /app/packages/shared-types/node_modules ./packages/shared-types/node_modules
+COPY --from=deps /app/packages/api-client/node_modules ./packages/api-client/node_modules
+
+# Copy source files
+COPY package.json pnpm-workspace.yaml turbo.json ./
+COPY apps/web ./apps/web
+COPY packages/shared-types ./packages/shared-types
+COPY packages/api-client ./packages/api-client
+
+# Build shared packages FIRST (explicit order)
+RUN pnpm --filter @omnia/shared-types build
+RUN pnpm --filter @omnia/api-client build
+
+# Then build web app with memory limits to prevent OOM
+# Railway default: 8GB RAM, but Next.js can spike during build
+# Limit Node.js to 4GB to leave headroom for OS + other processes
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+RUN pnpm --filter @omnia/web build
+
+# Stage 3: Production Runner
+FROM node:20-alpine AS runner
+RUN apk add --no-cache libc6-compat curl
+
+# Install PNPM in runtime (lightweight: ~10MB)
+RUN corepack enable && corepack prepare pnpm@10.26.2 --activate
+
+# Set production environment
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+WORKDIR /app
+
+# Create non-root user first
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# Copy workspace configs for pnpm resolution
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
+
+# Copy Next.js build output
+COPY --from=builder /app/apps/web/.next ./apps/web/.next
+COPY --from=builder /app/apps/web/package.json ./apps/web/package.json
+COPY --from=builder /app/apps/web/next.config.mjs ./apps/web/next.config.mjs
+COPY --from=builder /app/apps/web/public ./apps/web/public
+
+# Copy built shared packages (dist only, pnpm will install deps)
+COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
+COPY --from=builder /app/packages/shared-types/package.json ./packages/shared-types/package.json
+COPY --from=builder /app/packages/api-client/dist ./packages/api-client/dist
+COPY --from=builder /app/packages/api-client/package.json ./packages/api-client/package.json
+
+# Install ONLY production dependencies using pnpm
+# This respects workspace protocol and deduplicates properly
+RUN pnpm install --prod --frozen-lockfile
+
+# Set correct ownership
+RUN chown -R nextjs:nodejs /app
+
+USER nextjs
+
+# Expose frontend port
+EXPOSE 3000
+
+# Health check - check homepage
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:3000/ || exit 1
+
+# Start Next.js production server
+WORKDIR /app/apps/web
+CMD ["node_modules/.bin/next", "start"]

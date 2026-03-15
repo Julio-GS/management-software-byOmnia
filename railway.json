@@ -1,0 +1,35 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "services": [
+    {
+      "name": "backend",
+      "icon": "🔧",
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "Dockerfile"
+      },
+      "deploy": {
+        "numReplicas": 1,
+        "restartPolicyType": "ON_FAILURE",
+        "restartPolicyMaxRetries": 10,
+        "healthcheckPath": "/api/v1/health",
+        "healthcheckTimeout": 100
+      }
+    },
+    {
+      "name": "web",
+      "icon": "🌐",
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "Dockerfile.web"
+      },
+      "deploy": {
+        "numReplicas": 1,
+        "restartPolicyType": "ON_FAILURE",
+        "restartPolicyMaxRetries": 10,
+        "healthcheckPath": "/",
+        "healthcheckTimeout": 30
+      }
+    }
+  ]
+}
