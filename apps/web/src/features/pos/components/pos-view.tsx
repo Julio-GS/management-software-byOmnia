@@ -1,52 +1,79 @@
-"use client"
+"use client";
 
-import { useState, useMemo } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card"
-import { Button } from "@/shared/components/ui/button"
-import { Input } from "@/shared/components/ui/input"
-import { Badge } from "@/shared/components/ui/badge"
-import { Tabs, TabsList, TabsTrigger } from "@/shared/components/ui/tabs"
+import { useState, useMemo } from "react";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/shared/components/ui/card";
+import { Button } from "@/shared/components/ui/button";
+import { Input } from "@/shared/components/ui/input";
+import { Badge } from "@/shared/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
 import {
   Search,
   Barcode,
   SplitSquareVertical,
   ReceiptText,
   Loader2,
-} from "lucide-react"
+} from "lucide-react";
 
-import { usePosState } from "@/features/pos/hooks/use-pos-state"
-import { formatARS } from "@/features/pos/utils/format-currency"
-import type { Product } from "@omnia/shared-types"
+import { usePosState } from "@/features/pos/hooks/use-pos-state";
+import { formatARS } from "@/features/pos/utils/format-currency";
+import type { Product } from "@omnia/shared-types";
 
-import { PosCartTable, PosCartEmpty } from "./cart/cart-table"
-import { PosSummaryPanel } from "./checkout/summary-panel"
-import { PosPaymentDialog } from "./checkout/payment-dialog"
-import { PosCreditNoteDialog } from "./credit-note/credit-note-dialog"
-import { PosSplitTicketDialog } from "./cart/split-ticket-dialog"
+import { PosCartTable, PosCartEmpty } from "./cart/cart-table";
+import { PosSummaryPanel } from "./checkout/summary-panel";
+import { PosPaymentDialog } from "./checkout/payment-dialog";
+import { PosCreditNoteDialog } from "./credit-note/credit-note-dialog";
+import { PosSplitTicketDialog } from "./cart/split-ticket-dialog";
 
 export function PosView() {
   const {
-    cart, tickets, activeTicketId,
-    searchQuery, searchResults, isSearching,
-    checkoutStatus, selectedPaymentMethod, paymentAmount,
-    ticketItems, subtotal, totalDiscounts, taxes, total,
-    setSearchQuery, addToCart, updateQuantity, removeItem,
-    setActiveTicketId, addTicket, moveItemToTicket,
-    setSelectedPaymentMethod, setPaymentAmount,
-    openPaymentDialog, closePaymentDialog, confirmCheckout,
-  } = usePosState()
+    cart,
+    tickets,
+    activeTicketId,
+    searchQuery,
+    searchResults,
+    isSearching,
+    checkoutStatus,
+    selectedPaymentMethod,
+    paymentAmount,
+    ticketItems,
+    subtotal,
+    totalDiscounts,
+    taxes,
+    total,
+    setSearchQuery,
+    addToCart,
+    updateQuantity,
+    removeItem,
+    setActiveTicketId,
+    addTicket,
+    moveItemToTicket,
+    setSelectedPaymentMethod,
+    setPaymentAmount,
+    openPaymentDialog,
+    closePaymentDialog,
+    confirmCheckout,
+  } = usePosState();
 
-  const [creditNoteOpen, setCreditNoteOpen] = useState(false)
-  const [appliedCredit, setAppliedCredit] = useState<{ code: string; product: string; remaining: number } | null>(null)
-  const [splitOpen, setSplitOpen] = useState(false)
+  const [creditNoteOpen, setCreditNoteOpen] = useState(false);
+  const [appliedCredit, setAppliedCredit] = useState<{
+    code: string;
+    product: string;
+    remaining: number;
+  } | null>(null);
+  const [splitOpen, setSplitOpen] = useState(false);
 
-  const creditApplied = appliedCredit ? appliedCredit.remaining : 0
-  const totalBeforeCredit = subtotal - totalDiscounts + taxes
-  const totalWithCredit = Math.max(0, totalBeforeCredit - creditApplied)
+  const creditApplied = appliedCredit ? appliedCredit.remaining : 0;
+  const totalBeforeCredit = subtotal - totalDiscounts + taxes;
+  const totalWithCredit = Math.max(0, totalBeforeCredit - creditApplied);
 
   function handleProductSelect(product: Product) {
-    addToCart(product)
-    setSearchQuery("")
+    addToCart(product);
+    setSearchQuery("");
   }
 
   return (
@@ -54,11 +81,11 @@ export function PosView() {
       <div className="flex flex-1 flex-col gap-4">
         <Card className="border-border bg-card shadow-sm">
           <CardContent className="p-4">
-            <div className="relative">
-              <Barcode className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+            <div className="flex flex-row items-center gap-4 relative">
+              <Barcode className="mt-4 h-5 w-5 -translate-y-1/2 text-muted-foreground align-middle" />
               <Input
                 placeholder="Escanear codigo de barras o buscar producto..."
-                className="h-12 pl-11 pr-12 text-base bg-background border-input"
+                className="h-12 pl-12 align-middle text-base bg-background border-input"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -77,8 +104,12 @@ export function PosView() {
                     onClick={() => handleProductSelect(product)}
                   >
                     <div className="flex flex-col">
-                      <span className="text-sm font-medium text-card-foreground">{product.name}</span>
-                      <span className="font-mono text-xs text-muted-foreground">{product.barcode || product.sku}</span>
+                      <span className="text-sm font-medium text-card-foreground">
+                        {product.name}
+                      </span>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {product.barcode || product.sku}
+                      </span>
                     </div>
                     <span className="font-mono text-sm font-semibold text-card-foreground">
                       {formatARS(product.price)}
@@ -91,12 +122,19 @@ export function PosView() {
         </Card>
 
         <div className="flex items-center justify-between gap-3">
-          <Tabs value={activeTicketId} onValueChange={setActiveTicketId} className="flex-1">
+          <Tabs
+            value={activeTicketId}
+            onValueChange={setActiveTicketId}
+            className="flex-1"
+          >
             <TabsList className="h-9">
               {tickets.map((t) => (
                 <TabsTrigger key={t.id} value={t.id} className="text-xs">
                   {t.label}
-                  <Badge variant="secondary" className="ml-1.5 h-4 min-w-4 rounded-full px-1.5 text-[10px] font-mono">
+                  <Badge
+                    variant="secondary"
+                    className="ml-1.5 h-4 min-w-4 rounded-full px-1.5 text-[10px] font-mono"
+                  >
                     {cart.filter((i) => i.ticketId === t.id).length}
                   </Badge>
                 </TabsTrigger>
@@ -129,10 +167,12 @@ export function PosView() {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-base font-semibold text-card-foreground">
-                {tickets.find((t) => t.id === activeTicketId)?.label ?? "Carrito"}
+                {tickets.find((t) => t.id === activeTicketId)?.label ??
+                  "Carrito"}
               </CardTitle>
               <Badge variant="secondary" className="font-mono text-xs">
-                {ticketItems.length} {ticketItems.length === 1 ? "item" : "items"}
+                {ticketItems.length}{" "}
+                {ticketItems.length === 1 ? "item" : "items"}
               </Badge>
             </div>
           </CardHeader>
@@ -150,7 +190,7 @@ export function PosView() {
         </Card>
       </div>
 
-      <div className="flex w-[380px] flex-col gap-4">
+      <div className="flex flex-col gap-4 w-full lg:w-[720px]">
         <PosSummaryPanel
           subtotal={subtotal}
           discounts={totalDiscounts}
@@ -173,8 +213,8 @@ export function PosView() {
         creditNotes={[]}
         appliedCredit={appliedCredit}
         onApply={(credit) => {
-          setAppliedCredit(credit)
-          setCreditNoteOpen(false)
+          setAppliedCredit(credit);
+          setCreditNoteOpen(false);
         }}
         onRemove={() => setAppliedCredit(null)}
       />
@@ -191,7 +231,7 @@ export function PosView() {
       />
 
       <PosPaymentDialog
-        open={checkoutStatus === 'payment'}
+        open={checkoutStatus === "payment"}
         onClose={closePaymentDialog}
         checkoutStatus={checkoutStatus}
         selectedMethod={selectedPaymentMethod}
@@ -203,5 +243,5 @@ export function PosView() {
         creditApplied={creditApplied}
       />
     </div>
-  )
+  );
 }
