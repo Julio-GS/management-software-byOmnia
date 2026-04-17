@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { ReportsService } from './reports.service';
 import { ReportsRepository } from './repositories/reports.repository';
 import { PeriodType } from './dto/sales-summary.dto';
@@ -18,6 +19,12 @@ describe('ReportsService', () => {
     getSalesTrends: jest.fn(),
   };
 
+  const mockCacheManager = {
+    get: jest.fn(),
+    set: jest.fn(),
+    del: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -25,6 +32,10 @@ describe('ReportsService', () => {
         {
           provide: ReportsRepository,
           useValue: mockReportsRepository,
+        },
+        {
+          provide: CACHE_MANAGER,
+          useValue: mockCacheManager,
         },
       ],
     }).compile();

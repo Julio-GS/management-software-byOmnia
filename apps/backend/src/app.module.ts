@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { CqrsModule } from '@nestjs/cqrs';
 import { HealthController } from './health/health.controller';
 import { PrismaModule } from './database/prisma.module';
+import { OmniaCacheModule } from './cache/cache.module';
 import { ProductsModule } from './products/products.module';
 import { CategoriesModule } from './categories/categories.module';
 import { SalesModule } from './sales/sales.module';
@@ -20,6 +21,7 @@ import { ReportsModule } from './reports/reports.module';
       envFilePath: '.env',
     }),
     CqrsModule.forRoot(),
+    OmniaCacheModule,
     PrismaModule,
     AuthModule,
     UsersModule,

@@ -1,5 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import { EventBus } from '@nestjs/cqrs';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductsRepository } from './repositories/products.repository';
@@ -20,6 +22,7 @@ export class ProductsService {
   constructor(
     private readonly repository: ProductsRepository,
     private readonly eventBus: EventBus,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
   /**
@@ -47,9 +50,31 @@ export class ProductsService {
 
   /**
    * Find all products with optional filters.
+   * Supports caching via ENABLE_PRODUCTS_CACHE feature flag.
+   * Cache TTL: 5 minutes (300000ms)
    */
   async findAll(params?: { categoryId?: string; isActive?: boolean; search?: string }) {
+    // Feature flag check
+    const cacheEnabled = process.env.ENABLE_PRODUCTS_CACHE === 'true';
+
+    if (!cacheEnabled) {
+      // OLD path: direct DB query
+      const products = await this.repository.findAll(params);
+      return products.map((p) => p.toJSON());
+    }
+
+    // NEW path: cache-first
+    const cacheKey = `products:all:${JSON.stringify(params || {})}`;
+    const cached = await this.cacheManager.get(cacheKey);
+
+    if (cached) {
+      // Cache HIT - return cached data
+      return (cached as any[]).map((p) => p.toJSON());
+    }
+
+    // Cache MISS - query DB
     const products = await this.repository.findAll(params);
+    await this.cacheManager.set(cacheKey, products, 300000); // 5 min TTL
     return products.map((p) => p.toJSON());
   }
 

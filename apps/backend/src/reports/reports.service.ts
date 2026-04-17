@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { ReportsRepository } from './repositories/reports.repository';
 import {
   SalesSummaryDto,
@@ -13,9 +15,36 @@ import { Decimal } from '@prisma/client/runtime/library';
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly reportsRepository: ReportsRepository) {}
+  constructor(
+    private readonly reportsRepository: ReportsRepository,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+  ) {}
 
   async getSalesSummary(period: PeriodType): Promise<SalesSummaryDto> {
+    // Feature flag check
+    const cacheEnabled = process.env.ENABLE_DASHBOARD_CACHE === 'true';
+
+    if (!cacheEnabled) {
+      // OLD path: direct DB query
+      return this.calculateSalesSummary(period);
+    }
+
+    // NEW path: cache-first
+    const cacheKey = 'dashboard:metrics';
+    const cached = await this.cacheManager.get<SalesSummaryDto>(cacheKey);
+
+    if (cached) {
+      // Cache HIT
+      return cached;
+    }
+
+    // Cache MISS - calculate metrics
+    const summary = await this.calculateSalesSummary(period);
+    await this.cacheManager.set(cacheKey, summary, 120000); // 2 min TTL
+    return summary;
+  }
+
+  private async calculateSalesSummary(period: PeriodType): Promise<SalesSummaryDto> {
     const { startDate, endDate } = this.getPeriodDates(period);
 
     const sales = await this.reportsRepository.getSalesSummary(startDate, endDate);
