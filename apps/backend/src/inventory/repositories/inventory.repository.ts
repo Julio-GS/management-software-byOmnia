@@ -5,6 +5,15 @@ import { InventoryMovement } from '../entities/inventory-movement.entity';
 import { CreateMovementDto } from '../dto/create-movement.dto';
 import { StockAdjustmentDto } from '../dto/stock-adjustment.dto';
 
+interface CreateMovementWithPriceParams {
+  productId: string;
+  type: MovementType;
+  quantity: number;
+  reason?: string | null;
+  reference?: string | null;
+  notes?: string | null;
+}
+
 /**
  * InventoryRepository
  * 
@@ -86,6 +95,41 @@ export class InventoryRepository {
           newStock: dto.newStock,
           reason: dto.reason,
           userId: dto.userId,
+        },
+        include: {
+          product: true,
+          user: true,
+        },
+      });
+
+      return movement;
+    });
+
+    return InventoryMovement.fromPersistence(data);
+  }
+
+  async createMovementWithPrice(
+    params: CreateMovementWithPriceParams,
+    previousStock: number,
+    newStock: number,
+    newPrice: number,
+  ): Promise<InventoryMovement> {
+    const data = await this.prisma.$transaction(async (prisma) => {
+      await prisma.product.update({
+        where: { id: params.productId },
+        data: { stock: newStock, price: newPrice },
+      });
+
+      const movement = await prisma.inventoryMovement.create({
+        data: {
+          productId: params.productId,
+          type: params.type,
+          quantity: params.quantity,
+          previousStock,
+          newStock,
+          reason: params.reason,
+          reference: params.reference,
+          notes: params.notes,
         },
         include: {
           product: true,

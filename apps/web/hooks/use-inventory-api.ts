@@ -42,9 +42,27 @@ export function useInventoryAPI() {
     []
   );
 
+  const bulkMovement = useCallback(async (params: {
+    items: Array<{
+      productId: string;
+      stockQuantity?: number;
+      setStockTo?: number;
+      newPrice?: number;
+      movementType?: 'ENTRY' | 'EXIT' | 'ADJUSTMENT';
+      enabled?: boolean;
+    }>;
+    reason?: string;
+    reference?: string;
+    notes?: string;
+    continueOnError?: boolean;
+  }) => {
+    return await apiClient.inventory.bulkMovement(params);
+  }, []);
+
   return { 
     createMovement, 
     getMovements,
     getLowStockProducts,
+    bulkMovement,
   };
 }

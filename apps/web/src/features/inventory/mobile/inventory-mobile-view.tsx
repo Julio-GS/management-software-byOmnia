@@ -46,6 +46,7 @@ import {
   Minus,
 } from "lucide-react"
 import { useHapticFeedback } from "@/hooks/use-haptic-feedback"
+import { useInventoryAPI } from "@/hooks/use-inventory-api"
 import { apiClient } from "@/lib/api-client-instance"
 import { cn } from "@/lib/utils"
 import type { Product } from "@omnia/shared-types"
@@ -361,6 +362,7 @@ interface InventoryCardProps {
 function InventoryCard({ item, onReload }: InventoryCardProps) {
   const [adjusting, setAdjusting] = useState(false)
   const haptic = useHapticFeedback()
+  const { bulkMovement } = useInventoryAPI()
 
   const StatusBadge = ({ status }: { status: "ok" | "low" | "critical" }) => {
     if (status === "critical") {
@@ -385,16 +387,30 @@ function InventoryCard({ item, onReload }: InventoryCardProps) {
   }
 
   const handleQuickAdjust = async (delta: number) => {
+    if (adjusting) return
+    
     setAdjusting(true)
     try {
-      // TODO: Implement API call
-      console.log("Adjust stock:", item.id, delta)
-      haptic.trigger("success")
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      await bulkMovement({
+        items: [{
+          productId: item.id,
+          stockQuantity: Math.abs(delta),
+          movementType: delta > 0 ? 'ENTRY' : 'EXIT',
+          enabled: true,
+        }],
+        reason: 'Quick adjustment',
+      })
+      
+      if (haptic.isSupported) {
+        haptic.trigger('success')
+      }
+      
       onReload()
     } catch (error) {
-      console.error("Error adjusting stock:", error)
-      haptic.trigger("error")
+      console.error('Error adjusting stock:', error)
+      if (haptic.isSupported) {
+        haptic.trigger('error')
+      }
     } finally {
       setAdjusting(false)
     }

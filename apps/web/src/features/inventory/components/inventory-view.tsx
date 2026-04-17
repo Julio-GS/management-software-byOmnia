@@ -15,14 +15,6 @@ import {
   TableRow,
 } from "@/shared/components/ui/table"
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/shared/components/ui/dialog"
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -35,12 +27,11 @@ import {
   PackageMinus,
   Package,
   Search,
-  Pencil,
-  Check,
   X,
   Plus,
+  Pencil,
 } from "lucide-react"
-import { InventoryMovementForm } from "../InventoryMovementForm"
+import { BulkMovementDialog } from "./BulkMovementDialog"
 import { apiClient } from "@/lib/api-client-instance"
 import type { Product } from "@omnia/shared-types"
 
@@ -58,13 +49,6 @@ interface LowStockProduct {
   currentStock: number
   minStock: number
   unit: string
-}
-
-interface StockAdjustment {
-  itemId: string
-  name: string
-  currentStock: number
-  newStock: number
 }
 
 // Map Product to InventoryItem with computed status
@@ -144,9 +128,7 @@ export function InventoryView() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [showStockDialog, setShowStockDialog] = useState(false)
   const [showMovementDialog, setShowMovementDialog] = useState(false)
-  const [adjustments, setAdjustments] = useState<StockAdjustment[]>([])
 
   // Load products from API
   useEffect(() => {
@@ -226,47 +208,6 @@ export function InventoryView() {
       return next
     })
   }
-
-  function openStockDialog() {
-    const items = inventory.filter((item) => selectedIds.has(item.id))
-    setAdjustments(
-      items.map((item) => ({
-        itemId: item.id,
-        name: item.name,
-        currentStock: item.stock,
-        newStock: item.stock,
-      }))
-    )
-    setShowStockDialog(true)
-  }
-
-  function updateAdjustment(itemId: string, newStock: number) {
-    setAdjustments((prev) =>
-      prev.map((adj) => (adj.itemId === itemId ? { ...adj, newStock } : adj))
-    )
-  }
-
-  function applyStockChanges() {
-    setInventory((prev) =>
-      prev.map((item) => {
-        const adj = adjustments.find((a) => a.itemId === item.id)
-        if (adj && adj.newStock !== item.stock) {
-          const newStock = Math.max(0, adj.newStock)
-          return {
-            ...item,
-            stock: newStock,
-            status: getStatus(newStock, item.minStock),
-          }
-        }
-        return item
-      })
-    )
-    setShowStockDialog(false)
-    setSelectedIds(new Set())
-    setAdjustments([])
-  }
-
-  const hasChanges = adjustments.some((adj) => adj.newStock !== adj.currentStock)
 
   const handleMovementSuccess = () => {
     setShowMovementDialog(false)
@@ -385,9 +326,12 @@ export function InventoryView() {
                 onClick={() => setShowMovementDialog(true)}
                 size="sm"
                 className="h-8 gap-2 bg-primary text-primary-foreground"
+                disabled={selectedIds.size === 0}
               >
                 <Plus className="h-3.5 w-3.5" />
-                Crear Movimiento
+                {selectedIds.size > 0 
+                  ? `Movimiento (${selectedIds.size})` 
+                  : 'Crear Movimiento'}
               </Button>
             </div>
           </div>
@@ -436,17 +380,6 @@ export function InventoryView() {
                 <SelectItem value="critical">Critico</SelectItem>
               </SelectContent>
             </Select>
-
-            {selectedIds.size > 0 && (
-              <Button
-                onClick={openStockDialog}
-                size="sm"
-                className="h-9 gap-2 bg-primary text-primary-foreground"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-                Modificar Stock ({selectedIds.size})
-              </Button>
-            )}
           </div>
         </CardHeader>
         <CardContent className="flex-1 overflow-auto p-0">
@@ -545,96 +478,19 @@ export function InventoryView() {
         </CardContent>
       </Card>
 
-      {/* Bulk Stock Edit Dialog */}
-      <Dialog open={showStockDialog} onOpenChange={setShowStockDialog}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-card-foreground">
-              <Pencil className="h-4 w-4" />
-              Modificar Stock
-            </DialogTitle>
-            <DialogDescription>
-              Ajusta las cantidades de stock para los {adjustments.length} producto{adjustments.length !== 1 ? "s" : ""} seleccionado{adjustments.length !== 1 ? "s" : ""}.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex flex-col gap-3 max-h-[400px] overflow-y-auto py-2">
-            {adjustments.map((adj) => {
-              const diff = adj.newStock - adj.currentStock
-              return (
-                <div
-                  key={adj.itemId}
-                  className="flex items-center justify-between gap-4 rounded-lg border border-border bg-background px-4 py-3"
-                >
-                  <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                    <span className="text-sm font-medium text-card-foreground truncate">
-                      {adj.name}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      Stock actual: {adj.currentStock}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <Input
-                      type="number"
-                      min={0}
-                      value={adj.newStock}
-                      onChange={(e) =>
-                        updateAdjustment(adj.itemId, parseInt(e.target.value) || 0)
-                      }
-                      className="h-9 w-20 text-center font-mono text-sm bg-card border-input"
-                    />
-                    {diff !== 0 && (
-                      <span
-                        className={`font-mono text-xs font-semibold min-w-[50px] text-right ${
-                          diff > 0 ? "text-success-foreground" : "text-destructive"
-                        }`}
-                      >
-                        {diff > 0 ? "+" : ""}{diff}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowStockDialog(false)}
-              className="border-border text-card-foreground"
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={applyStockChanges}
-              disabled={!hasChanges}
-              className="gap-2 bg-primary text-primary-foreground"
-            >
-              <Check className="h-3.5 w-3.5" />
-              Aplicar Cambios
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Create Movement Dialog */}
-      <Dialog open={showMovementDialog} onOpenChange={setShowMovementDialog}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-card-foreground">
-              <Plus className="h-4 w-4" />
-              Crear Movimiento de Inventario
-            </DialogTitle>
-            <DialogDescription>
-              Registra una entrada, salida o ajuste de inventario
-            </DialogDescription>
-          </DialogHeader>
-          
-          <InventoryMovementForm onSuccess={handleMovementSuccess} />
-        </DialogContent>
-      </Dialog>
+      {/* Bulk Movement Dialog */}
+      <BulkMovementDialog
+        open={showMovementDialog}
+        onOpenChange={setShowMovementDialog}
+        preselectedProducts={selectedIds.size > 0 
+          ? inventory.filter(i => selectedIds.has(i.id))
+          : undefined}
+        onSuccess={() => {
+          loadProducts()
+          loadLowStockProducts()
+          setSelectedIds(new Set())
+        }}
+      />
     </div>
   )
 }

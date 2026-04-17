@@ -88,3 +88,37 @@ export interface BulkStockUpdate {
   quantity: number;
   type: MovementType;
 }
+
+export interface BulkMovementItem {
+  productId: string;
+  stockQuantity?: number;
+  newPrice?: number;
+  movementType?: MovementType;
+  setStockTo?: number;
+  enabled?: boolean;
+}
+
+export interface BulkMovementDto {
+  items: BulkMovementItem[];
+  reason?: string;
+  reference?: string;
+  notes?: string;
+  continueOnError?: boolean;
+  userId?: string;
+  deviceId?: string;
+}
+
+export interface BulkMovementError {
+  productId: string;
+  error: string;
+  code: string;
+}
+
+export interface BulkMovementResponse {
+  success: boolean;
+  movements: InventoryMovement[];
+  errors: BulkMovementError[];
+  processedCount: number;
+  failedCount: number;
+  message?: string;
+}

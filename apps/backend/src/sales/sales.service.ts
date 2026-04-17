@@ -1,11 +1,21 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Inject } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
+import { EventBus } from '@nestjs/cqrs';
+import { ConfigService } from '@nestjs/config';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { MovementType } from '@prisma/client';
+import { ISalesRepository } from './repositories/sales.repository.interface';
+import { SaleCreatedEvent } from '../shared/events/sale-created.event';
+import { SaleCancelledEvent } from '../shared/events/sale-cancelled.event';
 
 @Injectable()
 export class SalesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject('ISalesRepository') private readonly salesRepository: ISalesRepository,
+    private readonly eventBus: EventBus,
+    private readonly configService: ConfigService,
+  ) {}
 
   async create(createSaleDto: CreateSaleDto) {
     // Validate items array
@@ -13,11 +23,15 @@ export class SalesService {
       throw new BadRequestException('Sale must contain at least one item');
     }
 
-    // Generate unique sale number
-    const saleNumber = await this.generateSaleNumber();
+    const usesNewRepo = this.configService.get('ENABLE_SALES_REFACTOR', false);
 
-    // Use transaction to create sale, items, and update stock atomically
-    return this.prisma.$transaction(async (prisma) => {
+    if (!usesNewRepo) {
+      // OLD CODE PATH (existing Prisma logic)
+      // Generate unique sale number
+      const saleNumber = await this.generateSaleNumber();
+
+      // Use transaction to create sale, items, and update stock atomically
+      return this.prisma.$transaction(async (prisma) => {
       // Validate stock availability and calculate totals
       let subtotal = 0;
       let taxAmount = 0;
@@ -105,57 +119,123 @@ export class SalesService {
 
       return sale;
     });
+    } else {
+      // NEW CODE PATH (repository logic)
+      // TODO: Remove old code path after 2-week rollout
+      const saleNumber = await this.generateSaleNumber();
+
+      // Create sale using repository
+      const sale = await this.salesRepository.create({
+        saleNumber,
+        items: createSaleDto.items.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          subtotal: item.unitPrice * item.quantity,
+          productName: '', // Will be populated by repository
+        })),
+        total: createSaleDto.items.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0),
+        paymentMethod: createSaleDto.paymentMethod,
+        status: 'COMPLETED',
+        userId: createSaleDto.cashierId,
+      });
+
+      // Emit event for sync module
+      this.eventBus.publish(
+        new SaleCreatedEvent(
+          sale.id,
+          sale.saleNumber,
+          sale.total,
+          sale.items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            price: item.unitPrice,
+            subtotal: item.subtotal,
+          })),
+          sale.paymentMethod,
+          sale.createdAt,
+          createSaleDto.cashierId,
+        ),
+      );
+
+      return sale.toJSON();
+    }
   }
 
   async findAll(params?: { status?: string; startDate?: Date; endDate?: Date }) {
-    const where: any = {};
+    const usesNewRepo = this.configService.get('ENABLE_SALES_REFACTOR', false);
 
-    if (params?.status) {
-      where.status = params.status;
-    }
+    if (!usesNewRepo) {
+      // OLD CODE PATH
+      const where: any = {};
 
-    if (params?.startDate || params?.endDate) {
-      where.createdAt = {};
-      if (params.startDate) {
-        where.createdAt.gte = params.startDate;
+      if (params?.status) {
+        where.status = params.status;
       }
-      if (params.endDate) {
-        where.createdAt.lte = params.endDate;
-      }
-    }
 
-    return this.prisma.sale.findMany({
-      where,
-      include: {
-        items: {
-          include: {
-            product: true,
+      if (params?.startDate || params?.endDate) {
+        where.createdAt = {};
+        if (params.startDate) {
+          where.createdAt.gte = params.startDate;
+        }
+        if (params.endDate) {
+          where.createdAt.lte = params.endDate;
+        }
+      }
+
+      return this.prisma.sale.findMany({
+        where,
+        include: {
+          items: {
+            include: {
+              product: true,
+            },
           },
         },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+    } else {
+      // NEW CODE PATH
+      // TODO: Remove old code path after 2-week rollout
+      const sales = await this.salesRepository.findAll(params);
+      return sales.map((sale) => sale.toJSON());
+    }
   }
 
   async findOne(id: string) {
-    const sale = await this.prisma.sale.findUnique({
-      where: { id },
-      include: {
-        items: {
-          include: {
-            product: true,
+    const usesNewRepo = this.configService.get('ENABLE_SALES_REFACTOR', false);
+
+    if (!usesNewRepo) {
+      // OLD CODE PATH
+      const sale = await this.prisma.sale.findUnique({
+        where: { id },
+        include: {
+          items: {
+            include: {
+              product: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    if (!sale) {
-      throw new NotFoundException(`Sale with ID ${id} not found`);
+      if (!sale) {
+        throw new NotFoundException(`Sale with ID ${id} not found`);
+      }
+
+      return sale;
+    } else {
+      // NEW CODE PATH
+      // TODO: Remove old code path after 2-week rollout
+      const sale = await this.salesRepository.findById(id);
+
+      if (!sale) {
+        throw new NotFoundException(`Sale with ID ${id} not found`);
+      }
+
+      return sale;
     }
-
-    return sale;
   }
 
   async findBySaleNumber(saleNumber: string) {
@@ -178,58 +258,79 @@ export class SalesService {
   }
 
   async cancel(id: string, userId: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const sale = await tx.sale.findUnique({
-        where: { id },
-        include: { items: true },
-      });
+    const usesNewRepo = this.configService.get('ENABLE_SALES_REFACTOR', false);
 
-      if (!sale) {
-        throw new NotFoundException(`Sale ${id} not found`);
-      }
-
-      if (sale.status !== 'completed') {
-        throw new ConflictException(
-          `Sale ${sale.saleNumber} cannot be cancelled: current status is ${sale.status}`,
-        );
-      }
-
-      for (const item of sale.items) {
-        const product = await tx.product.findUnique({
-          where: { id: item.productId },
+    if (!usesNewRepo) {
+      // OLD CODE PATH
+      return this.prisma.$transaction(async (tx) => {
+        const sale = await tx.sale.findUnique({
+          where: { id },
+          include: { items: true },
         });
 
-        if (!product) continue; // defensive: product deleted after sale
+        if (!sale) {
+          throw new NotFoundException(`Sale ${id} not found`);
+        }
 
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stock: { increment: item.quantity } },
-        });
+        if (sale.status !== 'completed') {
+          throw new ConflictException(
+            `Sale ${sale.saleNumber} cannot be cancelled: current status is ${sale.status}`,
+          );
+        }
 
-        await tx.inventoryMovement.create({
-          data: {
-            productId: item.productId,
-            type: MovementType.ENTRY,
-            quantity: item.quantity,
-            previousStock: product.stock,
-            newStock: product.stock + item.quantity,
-            reason: 'Sale cancellation',
-            reference: sale.saleNumber,
-            userId,
+        for (const item of sale.items) {
+          const product = await tx.product.findUnique({
+            where: { id: item.productId },
+          });
+
+          if (!product) continue; // defensive: product deleted after sale
+
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { stock: { increment: item.quantity } },
+          });
+
+          await tx.inventoryMovement.create({
+            data: {
+              productId: item.productId,
+              type: MovementType.ENTRY,
+              quantity: item.quantity,
+              previousStock: product.stock,
+              newStock: product.stock + item.quantity,
+              reason: 'Sale cancellation',
+              reference: sale.saleNumber,
+              userId,
+            },
+          });
+        }
+
+        return tx.sale.update({
+          where: { id },
+          data: { status: 'cancelled' },
+          include: {
+            items: {
+              include: { product: true },
+            },
           },
         });
-      }
-
-      return tx.sale.update({
-        where: { id },
-        data: { status: 'cancelled' },
-        include: {
-          items: {
-            include: { product: true },
-          },
-        },
       });
-    });
+    } else {
+      // NEW CODE PATH
+      // TODO: Remove old code path after 2-week rollout
+      const sale = await this.salesRepository.cancel(id, userId);
+
+      // Emit event for sync module
+      this.eventBus.publish(
+        new SaleCancelledEvent(
+          sale.id,
+          'Cancelled by user',
+          new Date(),
+          userId,
+        ),
+      );
+
+      return sale.toJSON();
+    }
   }
 
   private async generateSaleNumber(): Promise<string> {

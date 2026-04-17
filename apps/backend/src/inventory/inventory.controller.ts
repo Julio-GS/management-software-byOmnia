@@ -6,11 +6,14 @@ import {
   Param,
   Query,
   UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth, ApiResponse as SwaggerApiResponse } from '@nestjs/swagger';
 import { InventoryService } from './inventory.service';
 import { CreateMovementDto } from './dto/create-movement.dto';
 import { StockAdjustmentDto } from './dto/stock-adjustment.dto';
+import { BulkMovementDto, BulkMovementResponseDto } from './dto/bulk-movement.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -40,6 +43,21 @@ export class InventoryController {
   @ApiResponse({ status: 404, description: 'Product not found' })
   adjustStock(@Body() adjustmentDto: StockAdjustmentDto) {
     return this.inventoryService.adjustStock(adjustmentDto);
+  }
+
+  @Post('bulk-movement')
+  @Roles('manager', 'admin')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create bulk inventory movements for multiple products' })
+  @SwaggerApiResponse({ status: 201, description: 'Bulk movement created successfully' })
+  @SwaggerApiResponse({ status: 207, description: 'Partial success - some items failed' })
+  @SwaggerApiResponse({ status: 400, description: 'Validation error or invalid request' })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({ status: 403, description: 'Forbidden - insufficient role' })
+  async createBulkMovement(
+    @Body() bulkMovementDto: BulkMovementDto
+  ): Promise<BulkMovementResponseDto> {
+    return this.inventoryService.createBulkMovement(bulkMovementDto);
   }
 
   @Get('movements')
