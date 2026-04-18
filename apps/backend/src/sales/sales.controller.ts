@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
+import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { CancelSaleDto } from './dto/cancel-sale.dto';
@@ -18,13 +19,21 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { GetSalesQuery } from './queries/get-sales.query';
+import { GetSaleByNumberQuery } from './queries/get-sale-by-number.query';
+import { CreateSaleCommand } from './commands/create-sale.command';
+import { CancelSaleCommand } from './commands/cancel-sale.command';
 
 @ApiTags('Sales')
 @ApiBearerAuth()
 @Controller('sales')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class SalesController {
-  constructor(private readonly salesService: SalesService) {}
+  constructor(
+    private readonly commandBus: CommandBus,
+    private readonly queryBus: QueryBus,
+    private readonly salesService: SalesService,
+  ) {}
 
   @Post()
   @Roles('cashier', 'manager', 'admin')
@@ -34,7 +43,19 @@ export class SalesController {
   @ApiResponse({ status: 404, description: 'Product not found' })
   @ApiResponse({ status: 409, description: 'Insufficient stock' })
   create(@Body() createSaleDto: CreateSaleDto) {
-    return this.salesService.create(createSaleDto);
+    return this.commandBus.execute(
+      new CreateSaleCommand(
+        createSaleDto.items,
+        createSaleDto.paymentMethod,
+        createSaleDto.discountAmount,
+        createSaleDto.customerId,
+        createSaleDto.customerName,
+        createSaleDto.customerEmail,
+        createSaleDto.notes,
+        createSaleDto.cashierId,
+        createSaleDto.deviceId,
+      ),
+    );
   }
 
   @Get()
@@ -54,7 +75,7 @@ export class SalesController {
     if (startDate) params.startDate = new Date(startDate);
     if (endDate) params.endDate = new Date(endDate);
 
-    return this.salesService.findAll(params);
+    return this.queryBus.execute(new GetSalesQuery(params));
   }
 
   @Get('number/:saleNumber')
@@ -63,7 +84,7 @@ export class SalesController {
   @ApiResponse({ status: 200, description: 'Sale found' })
   @ApiResponse({ status: 404, description: 'Sale not found' })
   findBySaleNumber(@Param('saleNumber') saleNumber: string) {
-    return this.salesService.findBySaleNumber(saleNumber);
+    return this.queryBus.execute(new GetSaleByNumberQuery(saleNumber));
   }
 
   @Patch(':id/cancel')
@@ -75,10 +96,12 @@ export class SalesController {
   @ApiResponse({ status: 409, description: 'Sale cannot be cancelled (wrong status)' })
   cancel(
     @Param('id') id: string,
-    @Body() _cancelSaleDto: CancelSaleDto,
+    @Body() cancelSaleDto: CancelSaleDto,
     @CurrentUser() user: { id: string },
   ) {
-    return this.salesService.cancel(id, user.id);
+    return this.commandBus.execute(
+      new CancelSaleCommand(id, user.id, cancelSaleDto.reason),
+    );
   }
 
   @Get(':id')

@@ -15,9 +15,6 @@ describe('Sales E2E Tests', () => {
   let createdSaleIds: string[] = [];
 
   beforeAll(async () => {
-    // Set feature flag for refactored code
-    process.env.ENABLE_SALES_REFACTOR = 'true';
-
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();

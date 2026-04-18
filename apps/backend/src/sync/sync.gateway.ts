@@ -20,6 +20,8 @@ import { JwtService } from '@nestjs/jwt';
  * - category:updated - When a category is updated
  * - inventory:movement - When inventory movement is created
  * - pricing:recalculated - When prices are recalculated
+ * - sale:created - When a sale is created
+ * - sale:cancelled - When a sale is cancelled
  * - sync:status - Sync status updates
  */
 @WebSocketGateway({
@@ -165,6 +167,24 @@ export class SyncGateway
       ...status,
     });
     this.logger.debug(`Emitted sync:status (${status.status})`);
+  }
+
+  // Emit sale created event to all connected clients
+  emitSaleCreated(sale: any) {
+    this.server.emit('sale:created', {
+      timestamp: new Date().toISOString(),
+      data: sale,
+    });
+    this.logger.debug(`Emitted sale:created for sale ${sale.id}`);
+  }
+
+  // Emit sale cancelled event to all connected clients
+  emitSaleCancelled(sale: any) {
+    this.server.emit('sale:cancelled', {
+      timestamp: new Date().toISOString(),
+      data: sale,
+    });
+    this.logger.debug(`Emitted sale:cancelled for sale ${sale.id}`);
   }
 
   // Handle ping from clients (for connection health check)

@@ -52,12 +52,12 @@ export function PosCartTable({ items, onUpdateQuantity, onRemove, title }: PosCa
                 <div className="flex flex-col gap-1">
                   <span className="text-sm font-medium text-card-foreground">{item.name}</span>
                   <span className="font-mono text-[11px] text-muted-foreground">{item.barcode}</span>
-                  {item.discount && (
+                  {item.discount && item.discount > 0 && (
                     <Badge
                       className="mt-0.5 w-fit border-success/30 bg-success/10 text-success-foreground text-[11px] font-medium"
                       variant="outline"
                     >
-                      {item.discount.label} {" -- Ahorro: "}{formatARS(itemDiscount)}
+                      Descuento{" -- Ahorro: "}{formatARS(itemDiscount)}
                     </Badge>
                   )}
                 </div>

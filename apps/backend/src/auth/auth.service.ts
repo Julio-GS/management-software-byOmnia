@@ -1,10 +1,11 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Inject } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UserEntity } from '../users/entities/user.entity';
+import { PinoLogger } from 'nestjs-pino';
 import * as bcrypt from 'bcrypt';
 
 // AuthResponse uses UserEntity which has role as string for backend flexibility
@@ -20,17 +21,24 @@ export class AuthService {
     private usersService: UsersService,
     private jwtService: JwtService,
     private configService: ConfigService,
-  ) {}
+    @Inject(PinoLogger) private readonly logger: PinoLogger,
+  ) {
+    logger.setContext(AuthService.name);
+  }
 
   async validateUser(email: string, password: string): Promise<any> {
+    this.logger.debug({ email }, 'Attempting to validate user');
+
     const user = await this.usersService.findByEmailWithPassword(email);
 
     if (!user) {
+      this.logger.warn({ email }, 'User not found during validation');
       return null;
     }
 
     // Check if user is active
     if (!user.isActive) {
+      this.logger.warn({ email, userId: user.id }, 'Inactive user attempted login');
       throw new UnauthorizedException('User account is inactive');
     }
 
@@ -38,8 +46,11 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
+      this.logger.warn({ email, userId: user.id }, 'Invalid password attempt');
       return null;
     }
+
+    this.logger.info({ email, userId: user.id }, 'User validated successfully');
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _, ...result } = user;
@@ -50,6 +61,7 @@ export class AuthService {
     const user = await this.validateUser(loginDto.email, loginDto.password);
 
     if (!user) {
+      this.logger.warn({ email: loginDto.email }, 'Login failed: Invalid credentials');
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -58,6 +70,8 @@ export class AuthService {
 
     // Generate tokens
     const tokens = await this.generateTokens(user);
+
+    this.logger.info({ userId: user.id, email: user.email }, 'User logged in successfully');
 
     return {
       ...tokens,
@@ -85,10 +99,13 @@ export class AuthService {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
       });
 
+      this.logger.debug({ userId: payload.sub }, 'Refresh token validated');
+
       // Verify user still exists and is active
       const user = await this.usersService.findOne(payload.sub);
 
       if (!user || !user.isActive) {
+        this.logger.warn({ userId: payload.sub }, 'Refresh token rejected: User inactive or not found');
         throw new UnauthorizedException('User is inactive or does not exist');
       }
 
@@ -105,8 +122,11 @@ export class AuthService {
         },
       );
 
+      this.logger.info({ userId: user.id }, 'Access token refreshed successfully');
+
       return { access_token };
     } catch (error) {
+      this.logger.error({ error: error.message }, 'Refresh token validation failed');
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
   }

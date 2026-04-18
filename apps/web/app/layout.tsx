@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/src/contexts/auth-context'
+import { ErrorBoundary } from '@/src/shared/components/error-boundary'
 import { Toaster } from '@/shared/components/ui/sonner'
 import './globals.css'
 
@@ -45,10 +46,12 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className={`${_inter.variable} ${_jetbrainsMono.variable} font-sans antialiased`}>
-        <AuthProvider>
-          {children}
-          <Toaster />
-        </AuthProvider>
+        <ErrorBoundary>
+          <AuthProvider>
+            {children}
+            <Toaster />
+          </AuthProvider>
+        </ErrorBoundary>
         <Analytics />
       </body>
     </html>

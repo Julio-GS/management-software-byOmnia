@@ -3,6 +3,7 @@ import { ReportsService } from './reports.service';
 import { ReportsRepository } from './repositories/reports.repository';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
+import { PinoLogger } from 'nestjs-pino';
 import { PeriodType } from './dto/sales-summary.dto';
 import { Decimal } from '@prisma/client/runtime/library';
 
@@ -23,11 +24,20 @@ describe('ReportsService - Caching', () => {
       getSalesSummaryForPreviousPeriod: jest.fn(),
     };
 
+    const mockLogger = {
+      setContext: jest.fn(),
+      debug: jest.fn(),
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ReportsService,
         { provide: ReportsRepository, useValue: mockRepository },
         { provide: CACHE_MANAGER, useValue: mockCacheManager },
+        { provide: PinoLogger, useValue: mockLogger },
       ],
     }).compile();
 

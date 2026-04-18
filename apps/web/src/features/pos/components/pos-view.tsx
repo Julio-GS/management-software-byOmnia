@@ -26,7 +26,7 @@ import type { Product } from "@omnia/shared-types";
 import { PosCartTable, PosCartEmpty } from "./cart/cart-table";
 import { PosSummaryPanel } from "./checkout/summary-panel";
 import { PosPaymentDialog } from "./checkout/payment-dialog";
-import { PosCreditNoteDialog } from "./credit-note/credit-note-dialog";
+import { PosCreditNoteDialog, type CreditNote } from "./credit-note/credit-note-dialog";
 import { PosSplitTicketDialog } from "./cart/split-ticket-dialog";
 
 export function PosView() {
@@ -60,11 +60,7 @@ export function PosView() {
   } = usePosState();
 
   const [creditNoteOpen, setCreditNoteOpen] = useState(false);
-  const [appliedCredit, setAppliedCredit] = useState<{
-    code: string;
-    product: string;
-    remaining: number;
-  } | null>(null);
+  const [appliedCredit, setAppliedCredit] = useState<CreditNote | null>(null);
   const [splitOpen, setSplitOpen] = useState(false);
 
   const creditApplied = appliedCredit ? appliedCredit.remaining : 0;

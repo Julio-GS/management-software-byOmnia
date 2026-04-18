@@ -5,7 +5,7 @@ import { Button } from "@/shared/components/ui/button"
 import { ReceiptText } from "lucide-react"
 import { formatARS } from "@/features/pos/utils/format-currency"
 
-interface CreditNote {
+export interface CreditNote {
   id: string
   code: string
   product: string

@@ -4,6 +4,7 @@ import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
 import { ReportsRepository } from './repositories/reports.repository';
 import { DashboardCacheInvalidationHandler } from './handlers/dashboard-cache-invalidation.handler';
+import { DashboardMetricsRefreshHandler } from './handlers/dashboard-metrics-refresh.handler';
 import { PrismaModule } from '../database/prisma.module';
 
 @Module({
@@ -13,6 +14,7 @@ import { PrismaModule } from '../database/prisma.module';
     ReportsService,
     ReportsRepository,
     DashboardCacheInvalidationHandler,
+    DashboardMetricsRefreshHandler,
   ],
   exports: [ReportsService],
 })

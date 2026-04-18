@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { CqrsModule } from '@nestjs/cqrs';
 import { InventoryService } from './inventory.service';
 import { InventoryController } from './inventory.controller';
@@ -14,7 +14,7 @@ import { SyncModule } from '../sync/sync.module';
 @Module({
   imports: [
     CqrsModule,
-    forwardRef(() => SyncModule),
+    SyncModule,
   ],
   controllers: [InventoryController],
   providers: [

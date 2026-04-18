@@ -4,6 +4,7 @@ import { ProductsRepository } from './repositories/products.repository';
 import { EventBus } from '@nestjs/cqrs';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
+import { PinoLogger } from 'nestjs-pino';
 import { Product } from './entities/product.entity';
 
 describe('ProductsService - Caching', () => {
@@ -28,12 +29,21 @@ describe('ProductsService - Caching', () => {
       publish: jest.fn(),
     };
 
+    const mockLogger = {
+      setContext: jest.fn(),
+      debug: jest.fn(),
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProductsService,
         { provide: ProductsRepository, useValue: mockRepository },
         { provide: EventBus, useValue: mockEventBus },
         { provide: CACHE_MANAGER, useValue: mockCacheManager },
+        { provide: PinoLogger, useValue: mockLogger },
       ],
     }).compile();
 

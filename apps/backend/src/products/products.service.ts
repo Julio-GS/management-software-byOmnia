@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import { EventBus } from '@nestjs/cqrs';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
+import { PinoLogger } from 'nestjs-pino';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductsRepository } from './repositories/products.repository';
@@ -23,7 +24,10 @@ export class ProductsService {
     private readonly repository: ProductsRepository,
     private readonly eventBus: EventBus,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
-  ) {}
+    @Inject(PinoLogger) private readonly logger: PinoLogger,
+  ) {
+    logger.setContext(ProductsService.name);
+  }
 
   /**
    * Create a new product.
@@ -69,10 +73,12 @@ export class ProductsService {
 
     if (cached) {
       // Cache HIT - return cached data
+      this.logger.debug({ cacheKey }, 'Products cache HIT');
       return (cached as any[]).map((p) => p.toJSON());
     }
 
     // Cache MISS - query DB
+    this.logger.info({ cacheKey, filters: params }, 'Products cache MISS - querying database');
     const products = await this.repository.findAll(params);
     await this.cacheManager.set(cacheKey, products, 300000); // 5 min TTL
     return products.map((p) => p.toJSON());

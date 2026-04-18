@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { SyncService } from './sync.service';
 import { SyncController } from './sync.controller';
 import { SyncGateway } from './sync.gateway';
+import { WebSocketNotificationService } from './services/websocket-notification.service';
 import {
   ProductCreatedHandler,
   ProductUpdatedHandler,
@@ -31,7 +32,16 @@ const EventHandlers = [
     }),
   ],
   controllers: [SyncController],
-  providers: [SyncService, SyncGateway, ...EventHandlers],
-  exports: [SyncService, SyncGateway],
+  providers: [
+    SyncService,
+    SyncGateway,
+    WebSocketNotificationService,
+    {
+      provide: 'NOTIFICATION_SERVICE',
+      useClass: WebSocketNotificationService,
+    },
+    ...EventHandlers,
+  ],
+  exports: [SyncService, SyncGateway, 'NOTIFICATION_SERVICE'],
 })
 export class SyncModule {}

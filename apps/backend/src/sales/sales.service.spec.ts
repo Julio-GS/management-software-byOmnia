@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SalesService } from './sales.service';
 import { ISalesRepository } from './repositories/sales.repository.interface';
 import { EventBus } from '@nestjs/cqrs';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../database/prisma.service';
 import { Sale } from './entities/sale.entity';
 import { SaleCreatedEvent } from '../shared/events/sale-created.event';
@@ -13,7 +12,6 @@ describe('SalesService (with repository)', () => {
   let service: SalesService;
   let repository: jest.Mocked<ISalesRepository>;
   let eventBus: jest.Mocked<EventBus>;
-  let configService: jest.Mocked<ConfigService>;
   let prisma: any;
 
   beforeEach(async () => {
@@ -28,10 +26,6 @@ describe('SalesService (with repository)', () => {
 
     const mockEventBus = {
       publish: jest.fn(),
-    };
-
-    const mockConfigService = {
-      get: jest.fn().mockReturnValue(true), // Enable refactor by default
     };
 
     const mockPrismaService = {
@@ -55,10 +49,6 @@ describe('SalesService (with repository)', () => {
           useValue: mockEventBus,
         },
         {
-          provide: ConfigService,
-          useValue: mockConfigService,
-        },
-        {
           provide: PrismaService,
           useValue: mockPrismaService,
         },
@@ -68,7 +58,6 @@ describe('SalesService (with repository)', () => {
     service = module.get<SalesService>(SalesService);
     repository = module.get('ISalesRepository') as jest.Mocked<ISalesRepository>;
     eventBus = module.get(EventBus) as jest.Mocked<EventBus>;
-    configService = module.get(ConfigService) as jest.Mocked<ConfigService>;
     prisma = module.get(PrismaService);
   });
 
@@ -306,61 +295,6 @@ describe('SalesService (with repository)', () => {
 
       // Assert
       expect(repository.findAll).toHaveBeenCalledWith({ startDate, endDate });
-    });
-  });
-
-  describe('feature flag disabled', () => {
-    beforeEach(() => {
-      configService.get.mockReturnValue(false); // Disable refactor
-    });
-
-    it('should use legacy Prisma code when flag is false', async () => {
-      // Arrange
-      const createSaleDto = {
-        items: [
-          {
-            productId: 'prod-1',
-            quantity: 2,
-            unitPrice: 10.5,
-            discount: 0,
-          },
-        ],
-        paymentMethod: 'cash' as const,
-        cashierId: 'user-1',
-      };
-
-      prisma.sale.count.mockResolvedValue(0);
-      prisma.$transaction.mockImplementation(async (callback: any) => {
-        const mockTx = {
-          product: {
-            findUnique: jest.fn().mockResolvedValue({
-              id: 'prod-1',
-              name: 'Product A',
-              isActive: true,
-              stock: 10,
-              taxRate: 0,
-            }),
-            update: jest.fn(),
-          },
-          sale: {
-            create: jest.fn().mockResolvedValue({
-              id: 'sale-123',
-              saleNumber: 'SALE-20260414-0001',
-              totalAmount: 21.0,
-              items: [],
-            }),
-          },
-        };
-        return callback(mockTx);
-      });
-
-      // Act
-      const result = await service.create(createSaleDto);
-
-      // Assert
-      expect(result).toBeDefined();
-      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-      expect(repository.create).not.toHaveBeenCalled();
     });
   });
 });

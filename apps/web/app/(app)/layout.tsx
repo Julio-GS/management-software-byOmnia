@@ -10,6 +10,7 @@
 
 "use client"
 
+import { ErrorBoundary } from "@/src/shared/components/error-boundary"
 import { AppNavigation } from "@/shared/components/layout/app-navigation"
 import { DesktopHeader } from "@/src/shared/components/layout/desktop-header"
 import { MobileHeader } from "@/src/shared/components/layout/mobile-header"
@@ -65,7 +66,9 @@ export default function AppLayout({
               : "flex-1 overflow-auto p-4 pb-[calc(3.5rem+env(safe-area-inset-bottom))] sm:p-6"
           }
         >
-          {children}
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
         </main>
       </div>
 

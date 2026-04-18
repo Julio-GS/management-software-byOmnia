@@ -33,6 +33,30 @@ export class ReportsRepository {
     return this.getSalesSummary(previousStart, previousEnd);
   }
 
+  /**
+   * Query sales summary from materialized view dashboard_metrics
+   * @param startDate - Start date of the period
+   * @param endDate - End date of the period
+   * @returns Aggregated metrics from the materialized view
+   */
+  async getSalesSummaryFromView(startDate: Date, endDate: Date) {
+    const result = await this.prisma.$queryRaw<
+      Array<{
+        date: Date;
+        total_sales: bigint;
+        total_revenue: Decimal;
+        total_items_sold: bigint;
+      }>
+    >`
+      SELECT date, total_sales, total_revenue, total_items_sold
+      FROM dashboard_metrics
+      WHERE date >= ${startDate}::date AND date <= ${endDate}::date
+      ORDER BY date DESC
+    `;
+
+    return result;
+  }
+
   async getTopProducts(startDate: Date, endDate: Date, limit: number = 10) {
     const result = await this.prisma.saleItem.groupBy({
       by: ['productId'],

@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { CqrsModule } from '@nestjs/cqrs';
 import { CategoriesService } from './categories.service';
 import { CategoriesController } from './categories.controller';
@@ -10,7 +10,7 @@ import { SyncModule } from '../sync/sync.module';
   imports: [
     CqrsModule,
     PricingModule,
-    forwardRef(() => SyncModule),
+    SyncModule,
   ],
   controllers: [CategoriesController],
   providers: [
