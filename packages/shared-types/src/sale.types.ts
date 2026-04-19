@@ -138,3 +138,13 @@ export interface RefundSaleDto {
     quantity: number;
   }>;
 }
+
+/**
+ * Response when a sale is cancelled
+ */
+export interface CancelSaleResponse {
+  id: string;
+  saleNumber: string;
+  status: 'cancelled';
+  updatedAt: string;
+}

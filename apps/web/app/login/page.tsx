@@ -1,17 +1,24 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useAuth } from '@/src/contexts/auth-context';
-import { Button } from '@/shared/components/ui/button';
-import { Input } from '@/shared/components/ui/input';
-import { Label } from '@/shared/components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/shared/components/ui/card';
-import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { useState } from "react";
+import { useAuth } from "@/src/contexts/auth-context";
+import { Button } from "@/shared/components/ui/button";
+import { Input } from "@/shared/components/ui/input";
+import { Label } from "@/shared/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/shared/components/ui/card";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
 
@@ -19,7 +26,7 @@ export default function LoginPage() {
     e.preventDefault();
 
     if (!email || !password) {
-      toast.error('Por favor completa todos los campos');
+      toast.error("Por favor completa todos los campos");
       return;
     }
 
@@ -27,10 +34,11 @@ export default function LoginPage() {
 
     try {
       await login({ email, password });
-      toast.success('¡Bienvenido!');
+      toast.success("¡Bienvenido!");
     } catch (error: any) {
-      console.error('Login error:', error);
-      const message = error?.response?.data?.message || 'Credenciales inválidas';
+      console.error("Login error:", error);
+      const message =
+        error?.response?.data?.message || "Credenciales inválidas";
       toast.error(message);
     } finally {
       setIsLoading(false);
@@ -41,7 +49,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">Omnia Management</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center">
+            Omnia Management
+          </CardTitle>
           <CardDescription className="text-center">
             Ingresa tus credenciales para acceder al sistema
           </CardDescription>
@@ -74,9 +84,9 @@ export default function LoginPage() {
             </div>
           </CardContent>
           <CardFooter>
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full mt-8" disabled={isLoading}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+              {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
             </Button>
           </CardFooter>
         </form>

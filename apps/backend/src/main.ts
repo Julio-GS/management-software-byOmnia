@@ -4,6 +4,21 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
+  // JWT_SECRET validation (security check)
+  const jwtSecret = process.env.JWT_SECRET;
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  if (!jwtSecret) {
+    if (isProduction) {
+      throw new Error('❌ FATAL: JWT_SECRET is required in production');
+    }
+    console.warn('⚠️  WARNING: JWT_SECRET not set - using fallback (INSECURE in production)');
+  } else if (jwtSecret.length < 32) {
+    console.warn(
+      `⚠️  WARNING: JWT_SECRET is weak (${jwtSecret.length} chars). Recommended: 32+ characters for security`,
+    );
+  }
+
   const app = await NestFactory.create(AppModule);
 
   // Global validation pipe

@@ -1,9 +1,0 @@
-# Railway Multi-Service Configuration
-# This automatically detects and deploys both services
-
-[build]
-builder = "nixpacks"
-
-[deploy]
-startCommand = "echo 'Use service-specific configuration'"
-restartPolicyType = "never"

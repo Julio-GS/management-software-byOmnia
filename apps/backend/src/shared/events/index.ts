@@ -6,3 +6,6 @@ export * from './category-updated.event';
 export * from './category-deleted.event';
 export * from './inventory-movement.event';
 export * from './pricing-recalculated.event';
+export * from './price-changed.event';
+export * from './sale-created.event';
+export * from './sale-cancelled.event';

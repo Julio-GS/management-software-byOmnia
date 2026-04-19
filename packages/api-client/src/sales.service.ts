@@ -3,6 +3,7 @@ import type {
   Sale,
   CreateSaleDto,
   PaginatedResponse,
+  CancelSaleResponse,
 } from '@omnia/shared-types';
 
 export interface SaleFilters {
@@ -48,7 +49,7 @@ export class SalesService {
   /**
    * Cancel a sale
    */
-  async cancel(id: string): Promise<Sale> {
-    return this.client.patch<Sale>(`/sales/${id}/cancel`);
+  async cancel(id: string): Promise<CancelSaleResponse> {
+    return this.client.patch<CancelSaleResponse>(`/sales/${id}/cancel`);
   }
 }

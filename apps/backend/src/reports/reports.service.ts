@@ -1,4 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
+import { PinoLogger } from 'nestjs-pino';
 import { ReportsRepository } from './repositories/reports.repository';
 import {
   SalesSummaryDto,
@@ -13,9 +16,49 @@ import { Decimal } from '@prisma/client/runtime/library';
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly reportsRepository: ReportsRepository) {}
+  constructor(
+    private readonly reportsRepository: ReportsRepository,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    @Inject(PinoLogger) private readonly logger: PinoLogger,
+  ) {
+    logger.setContext(ReportsService.name);
+  }
 
   async getSalesSummary(period: PeriodType): Promise<SalesSummaryDto> {
+    // Feature flag check for materialized view (Phase 14)
+    const viewEnabled = process.env.ENABLE_DASHBOARD_VIEW === 'true';
+
+    if (viewEnabled) {
+      // NEW path: query from materialized view
+      return this.queryFromMaterializedView(period);
+    }
+
+    // Feature flag check for cache (Phase 6)
+    const cacheEnabled = process.env.ENABLE_DASHBOARD_CACHE === 'true';
+
+    if (!cacheEnabled) {
+      // OLD path: direct DB query
+      return this.calculateSalesSummary(period);
+    }
+
+    // CACHE path: cache-first
+    const cacheKey = 'dashboard:metrics';
+    const cached = await this.cacheManager.get<SalesSummaryDto>(cacheKey);
+
+    if (cached) {
+      // Cache HIT
+      this.logger.debug({ cacheKey }, 'Dashboard cache HIT');
+      return cached;
+    }
+
+    // Cache MISS - calculate metrics
+    this.logger.info({ cacheKey, period }, 'Dashboard cache MISS - calculating metrics');
+    const summary = await this.calculateSalesSummary(period);
+    await this.cacheManager.set(cacheKey, summary, 120000); // 2 min TTL
+    return summary;
+  }
+
+  private async calculateSalesSummary(period: PeriodType): Promise<SalesSummaryDto> {
     const { startDate, endDate } = this.getPeriodDates(period);
 
     const sales = await this.reportsRepository.getSalesSummary(startDate, endDate);
@@ -49,6 +92,50 @@ export class ReportsService {
           .times(100)
           .toNumber()
       : 0;
+
+    return {
+      totalSales,
+      totalRevenue: totalRevenue.toNumber(),
+      productsSold,
+      avgTransactionValue: avgTransactionValue.toNumber(),
+      changeVsYesterday,
+    };
+  }
+
+  /**
+   * Query sales summary from materialized view (Phase 14: Read Models)
+   * 
+   * NOTE: This is a proof-of-concept implementation. PostgreSQL materialized views
+   * are designed for batch/scheduled refreshes, NOT real-time updates. The in-memory
+   * cache approach (Phase 6, ENABLE_DASHBOARD_CACHE) is more suitable for this use case.
+   * 
+   * This implementation demonstrates CQRS read model separation but may have stale data
+   * between refreshes triggered by SaleCreatedEvent/SaleCancelledEvent.
+   */
+  private async queryFromMaterializedView(period: PeriodType): Promise<SalesSummaryDto> {
+    const { startDate, endDate } = this.getPeriodDates(period);
+
+    const viewData = await this.reportsRepository.getSalesSummaryFromView(
+      startDate,
+      endDate,
+    );
+
+    // Aggregate metrics from daily rows
+    const totalSales = viewData.reduce((sum, row) => sum + Number(row.total_sales), 0);
+    const totalRevenue = viewData.reduce(
+      (sum, row) => sum.add(row.total_revenue),
+      new Decimal(0),
+    );
+    const productsSold = viewData.reduce(
+      (sum, row) => sum + Number(row.total_items_sold),
+      0,
+    );
+    const avgTransactionValue =
+      totalSales > 0 ? totalRevenue.dividedBy(totalSales) : new Decimal(0);
+
+    // NOTE: changeVsYesterday calculation requires previous period data
+    // For simplicity, returning 0 here (can be enhanced with another view query)
+    const changeVsYesterday = 0;
 
     return {
       totalSales,

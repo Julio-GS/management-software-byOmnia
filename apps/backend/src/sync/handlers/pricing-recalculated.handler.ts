@@ -1,18 +1,21 @@
 import { EventsHandler, IEventHandler } from '@nestjs/cqrs';
-import { Logger } from '@nestjs/common';
+import { Inject, Logger } from '@nestjs/common';
 import { PricingRecalculatedEvent } from '../../shared/events';
-import { SyncGateway } from '../sync.gateway';
+import { INotificationService } from '../../shared/interfaces/notification.service.interface';
 
 @EventsHandler(PricingRecalculatedEvent)
 export class PricingRecalculatedHandler implements IEventHandler<PricingRecalculatedEvent> {
   private readonly logger = new Logger(PricingRecalculatedHandler.name);
 
-  constructor(private readonly syncGateway: SyncGateway) {}
+  constructor(
+    @Inject('NOTIFICATION_SERVICE')
+    private readonly notificationService: INotificationService,
+  ) {}
 
-  handle(event: PricingRecalculatedEvent) {
+  async handle(event: PricingRecalculatedEvent): Promise<void> {
     this.logger.log(`Handling PricingRecalculatedEvent for product: ${event.productId}`);
     
-    this.syncGateway.emitPricingRecalculated({
+    await this.notificationService.notifyPricingRecalculated({
       type: 'product',
       count: 1,
       id: event.productId,

@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { CqrsModule } from '@nestjs/cqrs';
 import { PricingService } from './pricing.service';
 import { PricingController } from './pricing.controller';
@@ -10,7 +10,7 @@ import { SyncModule } from '../sync/sync.module';
   imports: [
     PrismaModule,
     CqrsModule,
-    forwardRef(() => SyncModule),
+    SyncModule,
   ],
   controllers: [PricingController],
   providers: [

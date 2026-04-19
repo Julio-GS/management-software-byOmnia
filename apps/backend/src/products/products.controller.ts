@@ -13,6 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
+import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -21,6 +22,9 @@ import { PricingService } from '../pricing/pricing.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { GetProductsQuery } from './queries/get-products.query';
+import { CreateProductCommand } from './commands/create-product.command';
+import { UpdateStockCommand } from './commands/update-stock.command';
 
 @ApiTags('Products')
 @ApiBearerAuth()
@@ -28,6 +32,8 @@ import { Roles } from '../auth/decorators/roles.decorator';
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ProductsController {
   constructor(
+    private readonly commandBus: CommandBus,
+    private readonly queryBus: QueryBus,
     private readonly productsService: ProductsService,
     private readonly pricingService: PricingService,
   ) {}
@@ -38,7 +44,24 @@ export class ProductsController {
   @ApiResponse({ status: 201, description: 'Product created successfully' })
   @ApiResponse({ status: 409, description: 'Product with SKU or barcode already exists' })
   create(@Body() createProductDto: CreateProductDto) {
-    return this.productsService.create(createProductDto);
+    return this.commandBus.execute(
+      new CreateProductCommand(
+        createProductDto.name,
+        createProductDto.description,
+        createProductDto.price,
+        createProductDto.cost,
+        createProductDto.sku,
+        createProductDto.barcode,
+        createProductDto.stock,
+        createProductDto.minStock,
+        createProductDto.maxStock,
+        createProductDto.categoryId,
+        createProductDto.markup,
+        createProductDto.taxRate,
+        createProductDto.imageUrl,
+        createProductDto.isActive,
+      ),
+    );
   }
 
   @Get()
@@ -53,7 +76,9 @@ export class ProductsController {
     @Query('isActive') isActive?: boolean,
     @Query('search') search?: string,
   ) {
-    return this.productsService.findAll({ categoryId, isActive, search });
+    return this.queryBus.execute(
+      new GetProductsQuery({ categoryId, isActive, search }),
+    );
   }
 
   @Get('total-value')
@@ -157,7 +182,18 @@ export class ProductsController {
   @ApiResponse({ status: 404, description: 'Product not found' })
   @ApiResponse({ status: 409, description: 'Insufficient stock' })
   updateStock(@Param('id') id: string, @Body('quantity') quantity: number) {
-    return this.productsService.updateStock(id, quantity);
+    // For backward compatibility, infer type='ADJUSTMENT' when only quantity is provided
+    return this.commandBus.execute(
+      new UpdateStockCommand(
+        id,
+        quantity,
+        'ADJUSTMENT',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      ),
+    );
   }
 
   @Delete(':id')

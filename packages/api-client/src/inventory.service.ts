@@ -72,4 +72,31 @@ export class InventoryService {
       params: { threshold },
     });
   }
+
+  /**
+   * Create bulk inventory movements for multiple products
+   */
+  async bulkMovement(dto: {
+    items: Array<{
+      productId: string;
+      stockQuantity?: number;
+      setStockTo?: number;
+      newPrice?: number;
+      movementType?: 'ENTRY' | 'EXIT' | 'ADJUSTMENT';
+      enabled?: boolean;
+    }>;
+    reason?: string;
+    reference?: string;
+    notes?: string;
+    continueOnError?: boolean;
+  }): Promise<{
+    success: boolean;
+    movements: any[];
+    errors: Array<{ productId: string; error: string; code: string }>;
+    processedCount: number;
+    failedCount: number;
+    message?: string;
+  }> {
+    return this.client.post('/inventory/bulk-movement', dto);
+  }
 }

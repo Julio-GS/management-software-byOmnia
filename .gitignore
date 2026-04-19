@@ -273,6 +273,9 @@ docker-compose.override.yml
 # MISCELLANEOUS
 # ==========================================
 
+# Agent Teams Lite / SDD artifacts
+.atl/
+
 # v0 runtime files (AI-generated code)
 __v0_runtime_loader.js
 __v0_devtools.tsx
