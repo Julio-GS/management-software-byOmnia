@@ -15,13 +15,13 @@ export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   async create(createUserDto: CreateUserDto): Promise<UserEntity> {
-    // Check if email already exists
+    // Check if username already exists
     const existingUser = await this.prisma.user.findUnique({
-      where: { email: createUserDto.email },
+      where: { username: createUserDto.username },
     });
 
     if (existingUser) {
-      throw new ConflictException('Email already exists');
+      throw new ConflictException('Username already exists');
     }
 
     // Hash password
@@ -75,6 +75,25 @@ export class UsersService {
   async findByEmailWithPassword(email: string) {
     return this.prisma.user.findUnique({
       where: { email },
+    });
+  }
+
+  async findByUsername(username: string): Promise<UserEntity | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { username },
+    });
+
+    if (!user) {
+      return null;
+    }
+
+    return new UserEntity(user);
+  }
+
+  // This method returns user WITH password for authentication
+  async findByUsernameWithPassword(username: string) {
+    return this.prisma.user.findUnique({
+      where: { username },
     });
   }
 

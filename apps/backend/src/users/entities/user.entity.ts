@@ -5,7 +5,8 @@ import type { User, UserRole } from '@omnia/shared-types';
 // It's compatible with the shared User type but keeps role as string for Prisma
 export class UserEntity {
   id: string;
-  email: string;
+  username: string;
+  email: string | null;
   
   @Exclude()
   password: string;

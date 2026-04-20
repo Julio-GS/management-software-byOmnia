@@ -22,7 +22,7 @@ describe('AuthService', () => {
 
   beforeEach(async () => {
     const mockUsersService = {
-      findByEmailWithPassword: jest.fn(),
+      findByUsernameWithPassword: jest.fn(),
       updateLastLogin: jest.fn(),
       findOne: jest.fn(),
       create: jest.fn(),
@@ -82,6 +82,7 @@ describe('AuthService', () => {
       // Arrange
       const mockUser = {
         id: 'user-123',
+        username: 'testuser',
         email: 'test@example.com',
         password: 'hashed-password',
         firstName: 'Test',
@@ -93,35 +94,36 @@ describe('AuthService', () => {
         lastLogin: null,
       };
 
-      usersService.findByEmailWithPassword.mockResolvedValue(mockUser);
+      usersService.findByUsernameWithPassword.mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
       // Act
-      const result = await service.validateUser('test@example.com', 'password123');
+      const result = await service.validateUser('testuser', 'password123');
 
       // Assert
       expect(result).toBeDefined();
       expect(result.password).toBeUndefined();
-      expect(result.email).toBe('test@example.com');
-      expect(usersService.findByEmailWithPassword).toHaveBeenCalledWith('test@example.com');
+      expect(result.username).toBe('testuser');
+      expect(usersService.findByUsernameWithPassword).toHaveBeenCalledWith('testuser');
     });
 
     it('should return null when user does not exist', async () => {
       // Arrange
-      usersService.findByEmailWithPassword.mockResolvedValue(null);
+      usersService.findByUsernameWithPassword.mockResolvedValue(null);
 
       // Act
-      const result = await service.validateUser('nonexistent@example.com', 'password123');
+      const result = await service.validateUser('nonexistent', 'password123');
 
       // Assert
       expect(result).toBeNull();
-      expect(usersService.findByEmailWithPassword).toHaveBeenCalledWith('nonexistent@example.com');
+      expect(usersService.findByUsernameWithPassword).toHaveBeenCalledWith('nonexistent');
     });
 
     it('should return null when password is invalid', async () => {
       // Arrange
       const mockUser = {
         id: 'user-123',
+        username: 'testuser',
         email: 'test@example.com',
         password: 'hashed-password',
         firstName: 'Test',
@@ -133,11 +135,11 @@ describe('AuthService', () => {
         lastLogin: null,
       };
 
-      usersService.findByEmailWithPassword.mockResolvedValue(mockUser);
+      usersService.findByUsernameWithPassword.mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
       // Act
-      const result = await service.validateUser('test@example.com', 'wrongpassword');
+      const result = await service.validateUser('testuser', 'wrongpassword');
 
       // Assert
       expect(result).toBeNull();
@@ -147,6 +149,7 @@ describe('AuthService', () => {
       // Arrange
       const mockUser = {
         id: 'user-123',
+        username: 'testuser',
         email: 'test@example.com',
         password: 'hashed-password',
         firstName: 'Test',
@@ -158,13 +161,13 @@ describe('AuthService', () => {
         lastLogin: null,
       };
 
-      usersService.findByEmailWithPassword.mockResolvedValue(mockUser);
+      usersService.findByUsernameWithPassword.mockResolvedValue(mockUser);
 
       // Act & Assert
-      await expect(service.validateUser('test@example.com', 'password123')).rejects.toThrow(
+      await expect(service.validateUser('testuser', 'password123')).rejects.toThrow(
         UnauthorizedException,
       );
-      await expect(service.validateUser('test@example.com', 'password123')).rejects.toThrow(
+      await expect(service.validateUser('testuser', 'password123')).rejects.toThrow(
         'User account is inactive',
       );
     });
@@ -174,12 +177,13 @@ describe('AuthService', () => {
     it('should return JWT tokens and user data when credentials are valid', async () => {
       // Arrange
       const loginDto = {
-        email: 'test@example.com',
+        username: 'testuser',
         password: 'password123',
       };
 
       const mockUser = {
         id: 'user-123',
+        username: 'testuser',
         email: 'test@example.com',
         firstName: 'Test',
         lastName: 'User',
@@ -209,14 +213,14 @@ describe('AuthService', () => {
       expect(result.access_token).toBe('mock-access-token');
       expect(result.refresh_token).toBe('mock-refresh-token');
       expect(result.user).toBeDefined();
-      expect(result.user.email).toBe('test@example.com');
+      expect(result.user.username).toBe('testuser');
       expect(usersService.updateLastLogin).toHaveBeenCalledWith('user-123');
     });
 
     it('should throw UnauthorizedException when credentials are invalid', async () => {
       // Arrange
       const loginDto = {
-        email: 'test@example.com',
+        username: 'testuser',
         password: 'wrongpassword',
       };
 
@@ -227,15 +231,16 @@ describe('AuthService', () => {
       await expect(service.login(loginDto)).rejects.toThrow('Invalid credentials');
     });
 
-    it('should generate JWT payload with userId, email, role, iat, exp', async () => {
+    it('should generate JWT payload with userId, username, role, iat, exp', async () => {
       // Arrange
       const loginDto = {
-        email: 'admin@example.com',
+        username: 'admin',
         password: 'password123',
       };
 
       const mockUser = {
         id: 'admin-456',
+        username: 'admin',
         email: 'admin@example.com',
         firstName: 'Admin',
         lastName: 'User',
@@ -264,7 +269,7 @@ describe('AuthService', () => {
       expect(jwtService.signAsync).toHaveBeenCalledWith(
         expect.objectContaining({
           sub: 'admin-456',
-          email: 'admin@example.com',
+          username: 'admin',
           role: 'admin',
         }),
         expect.objectContaining({
@@ -279,6 +284,7 @@ describe('AuthService', () => {
     it('should create user and return JWT tokens', async () => {
       // Arrange
       const registerDto = {
+        username: 'newuser',
         email: 'newuser@example.com',
         password: 'password123',
         firstName: 'New',
@@ -287,6 +293,7 @@ describe('AuthService', () => {
 
       const mockUser = new UserEntity({
         id: 'user-789',
+        username: 'newuser',
         email: 'newuser@example.com',
         password: 'hashed-password',
         firstName: 'New',
@@ -315,7 +322,7 @@ describe('AuthService', () => {
       expect(result).toBeDefined();
       expect(result.access_token).toBe('mock-access-token');
       expect(result.refresh_token).toBe('mock-refresh-token');
-      expect(result.user.email).toBe('newuser@example.com');
+      expect(result.user.username).toBe('newuser');
       expect(usersService.create).toHaveBeenCalledWith(registerDto);
     });
   });
@@ -324,9 +331,10 @@ describe('AuthService', () => {
     it('should return new access token when refresh token is valid', async () => {
       // Arrange
       const refreshToken = 'valid-refresh-token';
-      const mockPayload = { sub: 'user-123', email: 'test@example.com', role: 'cashier' };
+      const mockPayload = { sub: 'user-123', username: 'testuser', role: 'cashier' };
       const mockUser = new UserEntity({
         id: 'user-123',
+        username: 'testuser',
         email: 'test@example.com',
         password: 'hashed-password',
         firstName: 'Test',
@@ -375,9 +383,10 @@ describe('AuthService', () => {
     it('should throw UnauthorizedException when user is inactive', async () => {
       // Arrange
       const refreshToken = 'valid-refresh-token';
-      const mockPayload = { sub: 'user-123', email: 'test@example.com', role: 'cashier' };
+      const mockPayload = { sub: 'user-123', username: 'testuser', role: 'cashier' };
       const mockInactiveUser = new UserEntity({
         id: 'user-123',
+        username: 'testuser',
         email: 'test@example.com',
         password: 'hashed-password',
         firstName: 'Test',

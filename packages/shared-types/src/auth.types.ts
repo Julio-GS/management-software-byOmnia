@@ -1,7 +1,7 @@
 import { User, UserRole } from './user.types';
 
 export interface LoginRequest {
-  email: string;
+  username: string;
   password: string;
 }
 
@@ -21,7 +21,8 @@ export interface RefreshTokenResponse {
 }
 
 export interface RegisterRequest {
-  email: string;
+  username: string;
+  email?: string;
   password: string;
   firstName: string;
   lastName: string;

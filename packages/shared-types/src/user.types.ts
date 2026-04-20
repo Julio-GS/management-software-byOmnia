@@ -6,7 +6,8 @@ export enum UserRole {
 
 export interface User {
   id: string;
-  email: string;
+  username: string;
+  email?: string | null;
   firstName: string;
   lastName: string;
   role: UserRole;

@@ -1,3 +1,8 @@
+// Base event classes
+export * from './domain-event.base';
+export * from './integration-event.base';
+
+// Domain events
 export * from './product-created.event';
 export * from './product-updated.event';
 export * from './product-deleted.event';
