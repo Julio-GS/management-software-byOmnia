@@ -21,6 +21,7 @@ import { RubrosModule } from './rubros/rubros.module';
 import { DevolucionesModule } from './devoluciones/devoluciones.module';
 import { CajasModule } from './cajas/cajas.module';
 import { MovimientosCajaModule } from './movimientos-caja/movimientos-caja.module';
+import { CierresCajaModule } from './cierres-caja/cierres-caja.module';
 import { GlobalErrorInterceptor } from './shared/interceptors/global-error.interceptor';
 
 @Module({
@@ -50,6 +51,7 @@ import { GlobalErrorInterceptor } from './shared/interceptors/global-error.inter
     DevolucionesModule,
     CajasModule,
     MovimientosCajaModule,
+    CierresCajaModule,
   ],
   controllers: [HealthController],
   providers: [
