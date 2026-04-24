@@ -10,6 +10,14 @@ describe('PrismaService', () => {
     }).compile();
 
     service = module.get<PrismaService>(PrismaService);
+    
+    // Mock Prisma $transaction to avoid real DB connection
+    jest.spyOn(service, '$transaction').mockImplementation(async (callback: any) => {
+      if (typeof callback === 'function') {
+        return callback(service);
+      }
+      return callback;
+    });
   });
 
   afterEach(async () => {
@@ -18,6 +26,7 @@ describe('PrismaService', () => {
     } catch (error) {
       // Ignore disconnect errors in tests
     }
+    jest.restoreAllMocks();
   });
 
   describe('service initialization', () => {

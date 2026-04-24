@@ -81,14 +81,14 @@ describe('ReportsService - Caching', () => {
         {
           id: 'sale-1',
           saleNumber: 'S-001',
-          totalAmount: new Decimal(1000),
-          items: [{ quantity: 5 }],
+          total: new Decimal(1000),
+          detalle_ventas: [{ cantidad: new Decimal(5) }],
         },
         {
           id: 'sale-2',
           saleNumber: 'S-002',
-          totalAmount: new Decimal(2000),
-          items: [{ quantity: 10 }],
+          total: new Decimal(2000),
+          detalle_ventas: [{ cantidad: new Decimal(10) }],
         },
       ];
 
@@ -96,8 +96,8 @@ describe('ReportsService - Caching', () => {
         {
           id: 'sale-prev-1',
           saleNumber: 'S-PREV-001',
-          totalAmount: new Decimal(500),
-          items: [{ quantity: 2 }],
+          total: new Decimal(500),
+          detalle_ventas: [{ cantidad: new Decimal(2) }],
         },
       ];
 
@@ -129,8 +129,8 @@ describe('ReportsService - Caching', () => {
         {
           id: 'sale-1',
           saleNumber: 'S-001',
-          totalAmount: new Decimal(1000),
-          items: [{ quantity: 5 }],
+          total: new Decimal(1000),
+          detalle_ventas: [{ cantidad: new Decimal(5) }],
         },
       ];
 
@@ -156,8 +156,8 @@ describe('ReportsService - Caching', () => {
         {
           id: 'sale-1',
           saleNumber: 'S-001',
-          totalAmount: new Decimal(1000),
-          items: [{ quantity: 5 }],
+          total: new Decimal(1000),
+          detalle_ventas: [{ cantidad: new Decimal(5) }],
         },
       ];
 

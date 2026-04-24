@@ -19,6 +19,8 @@ import { UnidadesMedidaModule } from './unidades-medida/unidades-medida.module';
 import { ProveedoresModule } from './proveedores/proveedores.module';
 import { RubrosModule } from './rubros/rubros.module';
 import { DevolucionesModule } from './devoluciones/devoluciones.module';
+import { CajasModule } from './cajas/cajas.module';
+import { MovimientosCajaModule } from './movimientos-caja/movimientos-caja.module';
 import { GlobalErrorInterceptor } from './shared/interceptors/global-error.interceptor';
 
 @Module({
@@ -46,6 +48,8 @@ import { GlobalErrorInterceptor } from './shared/interceptors/global-error.inter
     RubrosModule,
     // Phase 4: Sales Operations
     DevolucionesModule,
+    CajasModule,
+    MovimientosCajaModule,
   ],
   controllers: [HealthController],
   providers: [

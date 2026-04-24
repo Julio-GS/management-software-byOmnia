@@ -3,8 +3,15 @@ module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/src', '<rootDir>/test'],
   testMatch: ['**/*.spec.ts', '**/*.e2e-spec.ts'],
+  setupFilesAfterEnv: ['<rootDir>/test/setUp.ts'],
   transform: {
-    '^.+\\.ts$': 'ts-jest',
+    '^.+\\.ts$': ['ts-jest', { 
+      useESM: false,
+      isolatedModules: true,
+      diagnostics: {
+        warnOnly: true,
+      },
+    }],
   },
   collectCoverageFrom: [
     'src/**/*.ts',

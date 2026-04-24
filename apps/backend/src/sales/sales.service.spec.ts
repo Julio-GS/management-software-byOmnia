@@ -29,7 +29,7 @@ describe('SalesService (with repository)', () => {
     };
 
     const mockPrismaService = {
-      sale: {
+      ventas: {
         count: jest.fn(),
         findUnique: jest.fn(),
         findMany: jest.fn(),
@@ -100,7 +100,7 @@ describe('SalesService (with repository)', () => {
       );
 
       repository.create.mockResolvedValue(mockSale);
-      prisma.sale.count.mockResolvedValue(0);
+      prisma.ventas.count.mockResolvedValue(0);
 
       // Act
       const result = await service.create(createSaleDto);
@@ -140,7 +140,7 @@ describe('SalesService (with repository)', () => {
         cashierId: 'user-1',
       };
 
-      prisma.sale.count.mockResolvedValue(0);
+      prisma.ventas.count.mockResolvedValue(0);
       repository.create.mockRejectedValue(new NotFoundException('Product with ID nonexistent not found'));
 
       // Act & Assert

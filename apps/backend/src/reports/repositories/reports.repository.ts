@@ -7,18 +7,16 @@ export class ReportsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async getSalesSummary(startDate: Date, endDate: Date) {
-    const sales = await this.prisma.sale.findMany({
+    const sales = await this.prisma.ventas.findMany({
       where: {
-        createdAt: {
+        fecha: {
           gte: startDate,
           lte: endDate,
         },
-        status: {
-          in: ['completed'],
-        },
+        anulada: false,
       },
       include: {
-        items: true,
+        detalle_ventas: true,
       },
     });
 
@@ -58,24 +56,24 @@ export class ReportsRepository {
   }
 
   async getTopProducts(startDate: Date, endDate: Date, limit: number = 10) {
-    const result = await this.prisma.saleItem.groupBy({
-      by: ['productId'],
+    const result = await this.prisma.detalle_ventas.groupBy({
+      by: ['producto_id'],
       where: {
-        sale: {
-          createdAt: {
+        venta: {
+          created_at: {
             gte: startDate,
             lte: endDate,
           },
-          status: 'completed',
+          estado: 'completed',
         },
       },
       _sum: {
-        quantity: true,
-        totalAmount: true,
+        cantidad: true,
+        subtotal: true,
       },
       orderBy: {
         _sum: {
-          quantity: 'desc',
+          cantidad: 'desc',
         },
       },
       take: limit,
@@ -84,14 +82,14 @@ export class ReportsRepository {
     // Fetch product details
     const productsData = await Promise.all(
       result.map(async (item) => {
-        const product = await this.prisma.product.findUnique({
-          where: { id: item.productId },
+        const product = await this.prisma.productos.findUnique({
+          where: { id: item.producto_id },
         });
         return {
-          productId: item.productId,
-          name: product?.name || 'Unknown',
-          quantitySold: item._sum.quantity || 0,
-          revenue: item._sum.totalAmount || new Decimal(0),
+          productId: item.producto_id,
+          name: product?.detalle || 'Unknown',
+          quantitySold: item._sum.cantidad || 0,
+          revenue: item._sum.subtotal || new Decimal(0),
         };
       }),
     );
@@ -100,67 +98,77 @@ export class ReportsRepository {
   }
 
   async getLowStockProducts(threshold?: number) {
-    const products = await this.prisma.product.findMany({
+    const products = await this.prisma.productos.findMany({
       where: {
-        isActive: true,
-        deletedAt: null,
-        stock: {
-          lte: threshold !== undefined ? threshold : this.prisma.product.fields.minStock,
-        },
+        activo: true,
+        maneja_stock: true,
       },
       include: {
-        category: true,
-      },
-      orderBy: {
-        stock: 'asc',
+        rubros: true,
+        lotes: {
+          where: {
+            activo: true,
+          },
+        },
       },
     });
 
-    // Filter manually if threshold is undefined (compare with minStock)
-    if (threshold === undefined) {
-      return products.filter((p) => p.stock <= p.minStock);
-    }
-
-    return products;
+    // Calculate stock_actual from lotes and filter
+    return products
+      .map((p) => ({
+        ...p,
+        stock_actual: p.lotes.reduce((sum, lote) => sum + lote.cantidad_actual, 0),
+      }))
+      .filter((p) => {
+        const compareValue = threshold !== undefined ? threshold : p.stock_minimo || 0;
+        return p.stock_actual <= compareValue;
+      })
+      .sort((a, b) => a.stock_actual - b.stock_actual);
   }
 
   async getStockRotation(days: number = 30) {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    const salesData = await this.prisma.saleItem.groupBy({
-      by: ['productId'],
+    const salesData = await this.prisma.detalle_ventas.groupBy({
+      by: ['producto_id'],
       where: {
-        sale: {
-          createdAt: {
+        venta: {
+          created_at: {
             gte: startDate,
           },
-          status: 'completed',
+          estado: 'completed',
         },
       },
       _sum: {
-        quantity: true,
+        cantidad: true,
       },
     });
 
     const rotationData = await Promise.all(
       salesData.map(async (item) => {
-        const product = await this.prisma.product.findUnique({
-          where: { id: item.productId },
+        const product = await this.prisma.productos.findUnique({
+          where: { id: item.producto_id },
+          include: {
+            lotes: {
+              where: { activo: true },
+            },
+          },
         });
 
         if (!product) return null;
 
-        const totalSold = item._sum.quantity || 0;
+        const totalSold = Number(item._sum.cantidad) || 0;
         const averageDailySales = totalSold / days;
-        const currentStock = product.stock;
+        const currentStock = product.lotes.reduce((sum, lote) => sum + lote.cantidad_actual, 0);
         const daysUntilStockout =
           averageDailySales > 0 ? currentStock / averageDailySales : Infinity;
         const rotationRate = currentStock > 0 ? totalSold / currentStock : 0;
 
+
         return {
           productId: product.id,
-          productName: product.name,
+          productName: product.detalle,
           averageDailySales,
           currentStock,
           daysUntilStockout: daysUntilStockout === Infinity ? -1 : daysUntilStockout,
@@ -173,20 +181,20 @@ export class ReportsRepository {
   }
 
   async getRevenueByCategory(startDate: Date, endDate: Date) {
-    const salesItems = await this.prisma.saleItem.findMany({
+    const salesItems = await this.prisma.detalle_ventas.findMany({
       where: {
-        sale: {
-          createdAt: {
+        ventas: {
+          fecha: {
             gte: startDate,
             lte: endDate,
           },
-          status: 'completed',
+          anulada: false,
         },
       },
       include: {
-        product: {
+        productos: {
           include: {
-            category: true,
+            rubros: true,
           },
         },
       },
@@ -199,19 +207,19 @@ export class ReportsRepository {
     >();
 
     salesItems.forEach((item) => {
-      const categoryId = item.product.categoryId || 'uncategorized';
-      const categoryName = item.product.category?.name || 'Sin Categoría';
+      const categoryId = item.productos.rubro_id || 'uncategorized';
+      const categoryName = item.productos.rubros?.nombre || 'Sin Categoría';
 
       if (!categoryMap.has(categoryId)) {
         categoryMap.set(categoryId, {
           name: categoryName,
           revenue: new Decimal(0),
           count: 0,
-        });
+      });
       }
 
       const existing = categoryMap.get(categoryId)!;
-      existing.revenue = existing.revenue.add(item.totalAmount);
+      existing.revenue = existing.revenue.add(item.subtotal);
       existing.count += 1;
     });
 
@@ -247,27 +255,27 @@ export class ReportsRepository {
       const nextDate = new Date(date);
       nextDate.setDate(nextDate.getDate() + 1);
 
-      const daySales = await this.prisma.sale.findMany({
+      const daySales = await this.prisma.ventas.findMany({
         where: {
-          createdAt: {
+          fecha: {
             gte: date,
             lt: nextDate,
           },
-          status: 'completed',
+          anulada: false,
         },
         include: {
-          items: true,
+          detalle_ventas: true,
         },
       });
 
       const salesCount = daySales.length;
       const revenue = daySales.reduce(
-        (sum, sale) => sum.add(sale.totalAmount),
+        (sum, sale) => sum.add(sale.total),
         new Decimal(0),
       );
       const productsSold = daySales.reduce(
         (sum, sale) =>
-          sum + sale.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
+          sum + sale.detalle_ventas.reduce((itemSum, item) => itemSum + Number(item.cantidad), 0),
         0,
       );
 

@@ -70,21 +70,21 @@ describe('ReportsService', () => {
       const mockSales = [
         {
           id: '1',
-          totalAmount: new Decimal(100),
-          items: [{ quantity: 5 }],
+          total: new Decimal(100),
+          detalle_ventas: [{ cantidad: new Decimal(5) }],
         },
         {
           id: '2',
-          totalAmount: new Decimal(200),
-          items: [{ quantity: 3 }],
+          total: new Decimal(200),
+          detalle_ventas: [{ cantidad: new Decimal(3) }],
         },
       ];
 
       const mockPreviousSales = [
         {
           id: '3',
-          totalAmount: new Decimal(250),
-          items: [{ quantity: 8 }],
+          total: new Decimal(250),
+          detalle_ventas: [{ cantidad: new Decimal(8) }],
         },
       ];
 
@@ -163,17 +163,17 @@ describe('ReportsService', () => {
       const mockLowStockProducts = [
         {
           id: '1',
-          name: 'Product A',
-          stock: 5,
-          minStock: 10,
-          category: { name: 'Category A' },
+          detalle: 'Product A',
+          stock_actual: 5,
+          stock_minimo: 10,
+          rubros: { nombre: 'Category A' },
         },
         {
           id: '2',
-          name: 'Product B',
-          stock: 2,
-          minStock: 20,
-          category: { name: 'Category B' },
+          detalle: 'Product B',
+          stock_actual: 2,
+          stock_minimo: 20,
+          rubros: { nombre: 'Category B' },
         },
       ];
 

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UpdateStockHandler } from './update-stock.handler';
 import { InventoryService } from '../../../inventory/inventory.service';
 import { UpdateStockCommand } from '../update-stock.command';
+import { createMockStockMovement } from '../../../shared/test-utils';
 
 describe('UpdateStockHandler', () => {
   let handler: UpdateStockHandler;
@@ -23,7 +24,7 @@ describe('UpdateStockHandler', () => {
     }).compile();
 
     handler = module.get<UpdateStockHandler>(UpdateStockHandler);
-    inventoryService = module.get(InventoryService);
+    inventoryService = module.get(InventoryService) as jest.Mocked<InventoryService>;
   });
 
   it('should be defined', () => {
@@ -41,13 +42,12 @@ describe('UpdateStockHandler', () => {
       reason: 'Restocking',
     };
 
-    const mockMovement = {
+    const mockMovement = createMockStockMovement({
       id: 'mov-123',
-      productId: 'prod-123',
-      quantity: 10,
-      type: 'ENTRY',
-      newStock: 50,
-    };
+      producto_id: 'prod-123',
+      cantidad: 10,
+      tipo_movimiento: 'ENTRADA', // Valid Spanish type
+    });
 
     inventoryService.createMovement.mockResolvedValue(mockMovement);
 
@@ -71,7 +71,12 @@ describe('UpdateStockHandler', () => {
       reason: 'Sale adjustment',
     };
 
-    const mockMovement = { id: 'mov-456', productId: 'prod-456', quantity: 5, type: 'EXIT', newStock: 15 };
+    const mockMovement = createMockStockMovement({
+      id: 'mov-456',
+      producto_id: 'prod-456',
+      cantidad: 5,
+      tipo_movimiento: 'SALIDA', // Valid Spanish type
+    });
     inventoryService.createMovement.mockResolvedValue(mockMovement);
 
     // Act
@@ -92,7 +97,12 @@ describe('UpdateStockHandler', () => {
       reason: 'Stock correction',
     };
 
-    const mockMovement = { id: 'mov-789', productId: 'prod-789', quantity: -3, type: 'ADJUSTMENT', newStock: 47 };
+    const mockMovement = createMockStockMovement({
+      id: 'mov-789',
+      producto_id: 'prod-789',
+      cantidad: -3,
+      tipo_movimiento: 'AJUSTE', // Valid Spanish type
+    });
     inventoryService.createMovement.mockResolvedValue(mockMovement);
 
     // Act

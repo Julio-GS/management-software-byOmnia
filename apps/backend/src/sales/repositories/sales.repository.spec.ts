@@ -1,28 +1,32 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SalesRepository } from './sales.repository';
 import { PrismaService } from '../../database/prisma.service';
-import { NotFoundException, ConflictException } from '@nestjs/common';
 import { Sale } from '../entities/sale.entity';
 import { RepositoryException } from '../../shared/exceptions/repository.exception';
+import { Decimal } from '@prisma/client/runtime/library';
 
 describe('SalesRepository', () => {
   let repository: SalesRepository;
   let prisma: any;
 
   beforeEach(async () => {
-    // Create mock PrismaService
+    // Create mock PrismaService with SPANISH model names
     const mockPrismaService = {
-      sale: {
+      ventas: {
         create: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
         findMany: jest.fn(),
       },
-      product: {
+      productos: {
         findUnique: jest.fn(),
         update: jest.fn(),
       },
-      inventoryMovement: {
+      detalle_ventas: {
+        create: jest.fn(),
+        createMany: jest.fn(),
+      },
+      movimientos_stock: {
         create: jest.fn(),
       },
       $transaction: jest.fn(),
@@ -66,27 +70,34 @@ describe('SalesRepository', () => {
         userId: 'user-1',
       };
 
+      // Spanish Prisma field names: numero_ticket, total, detalle_ventas, etc.
       const mockPrismaResult = {
         id: 'sale-123',
-        saleNumber: dto.saleNumber,
-        totalAmount: dto.total,
-        subtotal: dto.total,
-        taxAmount: 0,
-        discountAmount: 0,
-        paymentMethod: dto.paymentMethod,
-        status: dto.status,
-        createdAt: new Date(),
-        items: dto.items.map((item) => ({
-          ...item,
+        numero_ticket: dto.saleNumber,
+        total: new Decimal(dto.total),
+        subtotal: new Decimal(dto.total),
+        descuentos: new Decimal(0),
+        vuelto: new Decimal(0),
+        caja_id: '550e8400-e29b-41d4-a716-446655440012',
+        usuario_id: dto.userId,
+        anulada: false,
+        fecha: new Date(),
+        fecha_anulacion: null,
+        detalle_ventas: dto.items.map((item) => ({
           id: 'item-1',
-          saleId: 'sale-123',
-          taxAmount: 0,
-          discount: 0,
-          totalAmount: item.subtotal,
+          venta_id: 'sale-123',
+          producto_id: item.productId,
+          cantidad: new Decimal(item.quantity),
+          precio_unitario: new Decimal(item.unitPrice),
+          subtotal: new Decimal(item.subtotal),
+          descuento: new Decimal(0),
+          total: new Decimal(item.subtotal),
+          iva_porcentaje: new Decimal(21),
+          iva_monto: new Decimal(0),
         })),
       };
 
-      prisma.sale.create.mockResolvedValue(mockPrismaResult);
+      prisma.ventas.create.mockResolvedValue(mockPrismaResult);
 
       // Act
       const result = await repository.create(dto);
@@ -96,7 +107,7 @@ describe('SalesRepository', () => {
       expect(result.id).toBe('sale-123');
       expect(result.saleNumber).toBe(dto.saleNumber);
       expect(result.total).toBe(21.0);
-      expect(prisma.sale.create).toHaveBeenCalledTimes(1);
+      expect(prisma.ventas.create).toHaveBeenCalledTimes(1);
     });
 
     it('should throw RepositoryException on database error', async () => {
@@ -117,7 +128,7 @@ describe('SalesRepository', () => {
         status: 'COMPLETED',
       };
 
-      prisma.sale.create.mockRejectedValue(new Error('Database connection failed'));
+      prisma.ventas.create.mockRejectedValue(new Error('Database connection failed'));
 
       // Act & Assert
       await expect(repository.create(dto)).rejects.toThrow(RepositoryException);
@@ -127,30 +138,33 @@ describe('SalesRepository', () => {
 
   describe('findById', () => {
     it('should return Sale entity when found', async () => {
-      // Arrange
+      // Arrange - Spanish Prisma field names
       const mockPrismaResult = {
         id: 'sale-123',
-        saleNumber: 'SALE-20260414-0001',
-        totalAmount: 21.0,
-        subtotal: 21.0,
-        taxAmount: 0,
-        discountAmount: 0,
-        paymentMethod: 'CASH',
-        status: 'completed',
-        createdAt: new Date(),
-        items: [
+        numero_ticket: 'SALE-20260414-0001',
+        total: new Decimal(21.0),
+        subtotal: new Decimal(21.0),
+        descuentos: new Decimal(0),
+        vuelto: new Decimal(0),
+        caja_id: '550e8400-e29b-41d4-a716-446655440012',
+        usuario_id: 'user-1',
+        anulada: false,
+        fecha: new Date(),
+        fecha_anulacion: null,
+        detalle_ventas: [
           {
             id: 'item-1',
-            productId: 'prod-1',
-            quantity: 2,
-            unitPrice: 10.5,
-            subtotal: 21.0,
-            productName: 'Product A',
+            venta_id: 'sale-123',
+            producto_id: 'prod-1',
+            cantidad: new Decimal(2),
+            precio_unitario: new Decimal(10.5),
+            subtotal: new Decimal(21.0),
+            total: new Decimal(21.0),
           },
         ],
       };
 
-      prisma.sale.findUnique.mockResolvedValue(mockPrismaResult);
+      prisma.ventas.findUnique.mockResolvedValue(mockPrismaResult);
 
       // Act
       const result = await repository.findById('sale-123');
@@ -158,15 +172,15 @@ describe('SalesRepository', () => {
       // Assert
       expect(result).toBeInstanceOf(Sale);
       expect(result?.id).toBe('sale-123');
-      expect(prisma.sale.findUnique).toHaveBeenCalledWith({
+      expect(prisma.ventas.findUnique).toHaveBeenCalledWith({
         where: { id: 'sale-123' },
-        include: { items: true },
+        include: { detalle_ventas: true },
       });
     });
 
     it('should return null when sale not found', async () => {
       // Arrange
-      prisma.sale.findUnique.mockResolvedValue(null);
+      prisma.ventas.findUnique.mockResolvedValue(null);
 
       // Act
       const result = await repository.findById('nonexistent');
@@ -178,47 +192,50 @@ describe('SalesRepository', () => {
 
   describe('update', () => {
     it('should update sale status', async () => {
-      // Arrange
+      // Arrange - Spanish Prisma field names
       const mockPrismaResult = {
         id: 'sale-123',
-        saleNumber: 'SALE-20260414-0001',
-        totalAmount: 21.0,
-        subtotal: 21.0,
-        taxAmount: 0,
-        discountAmount: 0,
-        paymentMethod: 'CASH',
-        status: 'cancelled',
-        createdAt: new Date(),
-        items: [
+        numero_ticket: 'SALE-20260414-0001',
+        total: new Decimal(21.0),
+        subtotal: new Decimal(21.0),
+        descuentos: new Decimal(0),
+        vuelto: new Decimal(0),
+        caja_id: '550e8400-e29b-41d4-a716-446655440012',
+        usuario_id: 'user-1',
+        anulada: true,
+        fecha: new Date(),
+        fecha_anulacion: new Date(),
+        detalle_ventas: [
           {
             id: 'item-1',
-            productId: 'prod-1',
-            quantity: 2,
-            unitPrice: 10.5,
-            subtotal: 21.0,
-            productName: 'Product A',
+            venta_id: 'sale-123',
+            producto_id: 'prod-1',
+            cantidad: new Decimal(2),
+            precio_unitario: new Decimal(10.5),
+            subtotal: new Decimal(21.0),
+            total: new Decimal(21.0),
           },
         ],
       };
 
-      prisma.sale.update.mockResolvedValue(mockPrismaResult);
+      prisma.ventas.update.mockResolvedValue(mockPrismaResult);
 
       // Act
       const result = await repository.update('sale-123', { status: 'cancelled' });
 
       // Assert
       expect(result).toBeInstanceOf(Sale);
-      expect(result.status).toBe('cancelled');
-      expect(prisma.sale.update).toHaveBeenCalledWith({
+      expect(result.status).toBe('CANCELLED');
+      expect(prisma.ventas.update).toHaveBeenCalledWith({
         where: { id: 'sale-123' },
-        data: { status: 'cancelled' },
-        include: { items: true },
+        data: { anulada: true },
+        include: { detalle_ventas: true },
       });
     });
 
     it('should throw RepositoryException if sale not found', async () => {
       // Arrange
-      prisma.sale.update.mockRejectedValue(new Error('Record not found'));
+      prisma.ventas.update.mockRejectedValue(new Error('Record not found'));
 
       // Act & Assert
       await expect(repository.update('nonexistent', { status: 'cancelled' })).rejects.toThrow(
@@ -229,50 +246,49 @@ describe('SalesRepository', () => {
 
   describe('cancel', () => {
     it('should cancel sale and restore stock', async () => {
-      // Arrange
+      // Arrange - Spanish Prisma field names
       const mockSale = {
         id: 'sale-123',
-        saleNumber: 'SALE-20260414-0001',
-        totalAmount: 21.0,
-        subtotal: 21.0,
-        taxAmount: 0,
-        discountAmount: 0,
-        paymentMethod: 'CASH',
-        status: 'completed',
-        createdAt: new Date(),
-        items: [
+        numero_ticket: 'SALE-20260414-0001',
+        total: new Decimal(21.0),
+        subtotal: new Decimal(21.0),
+        descuentos: new Decimal(0),
+        anulada: false,
+        fecha: new Date(),
+        detalle_ventas: [
           {
             id: 'item-1',
-            productId: 'prod-1',
-            quantity: 2,
-            unitPrice: 10.5,
-            subtotal: 21.0,
+            venta_id: 'sale-123',
+            producto_id: 'prod-1',
+            cantidad: new Decimal(2),
+            precio_unitario: new Decimal(10.5),
+            subtotal: new Decimal(21.0),
           },
         ],
       };
 
       const mockProduct = {
         id: 'prod-1',
-        stock: 8,
+        codigo: 'PROD001',
       };
 
       const mockCancelledSale = {
         ...mockSale,
-        status: 'cancelled',
+        anulada: true,
+        fecha_anulacion: new Date(),
       };
 
-      // Mock transaction execution
+      // Mock transaction execution with Spanish model names
       prisma.$transaction.mockImplementation(async (callback: any) => {
         const mockTx = {
-          sale: {
+          ventas: {
             findUnique: jest.fn().mockResolvedValue(mockSale),
             update: jest.fn().mockResolvedValue(mockCancelledSale),
           },
-          product: {
+          productos: {
             findUnique: jest.fn().mockResolvedValue(mockProduct),
-            update: jest.fn().mockResolvedValue({ ...mockProduct, stock: 10 }),
           },
-          inventoryMovement: {
+          movimientos_stock: {
             create: jest.fn().mockResolvedValue({}),
           },
         };
@@ -284,7 +300,7 @@ describe('SalesRepository', () => {
 
       // Assert
       expect(result).toBeInstanceOf(Sale);
-      expect(result.status).toBe('cancelled');
+      expect(result.status).toBe('CANCELLED');
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     });
 
@@ -292,7 +308,7 @@ describe('SalesRepository', () => {
       // Arrange
       prisma.$transaction.mockImplementation(async (callback: any) => {
         const mockTx = {
-          sale: {
+          ventas: {
             findUnique: jest.fn().mockResolvedValue(null),
           },
         };
@@ -304,19 +320,19 @@ describe('SalesRepository', () => {
       await expect(repository.cancel('nonexistent', 'user-1')).rejects.toThrow('Sale nonexistent not found');
     });
 
-    it('should throw RepositoryException if sale is not completed', async () => {
-      // Arrange
-      const mockPendingSale = {
+    it('should throw RepositoryException if sale is already cancelled', async () => {
+      // Arrange - Spanish field: anulada = true
+      const mockCancelledSale = {
         id: 'sale-123',
-        saleNumber: 'SALE-20260414-0001',
-        status: 'pending',
-        items: [],
+        numero_ticket: 'SALE-20260414-0001',
+        anulada: true,
+        detalle_ventas: [],
       };
 
       prisma.$transaction.mockImplementation(async (callback: any) => {
         const mockTx = {
-          sale: {
-            findUnique: jest.fn().mockResolvedValue(mockPendingSale),
+          ventas: {
+            findUnique: jest.fn().mockResolvedValue(mockCancelledSale),
           },
         };
         return callback(mockTx);
@@ -325,7 +341,7 @@ describe('SalesRepository', () => {
       // Act & Assert
       await expect(repository.cancel('sale-123', 'user-1')).rejects.toThrow(RepositoryException);
       await expect(repository.cancel('sale-123', 'user-1')).rejects.toThrow(
-        'Sale SALE-20260414-0001 cannot be cancelled: current status is pending',
+        'already cancelled',
       );
     });
   });
@@ -336,46 +352,45 @@ describe('SalesRepository', () => {
       const startDate = new Date('2026-04-01');
       const endDate = new Date('2026-04-30');
 
+      // Spanish Prisma field names
       const mockPrismaResults = [
         {
           id: 'sale-1',
-          saleNumber: 'SALE-20260410-0001',
-          totalAmount: 100,
-          paymentMethod: 'CASH',
-          status: 'completed',
-          createdAt: new Date('2026-04-10'),
-          items: [
+          numero_ticket: 'SALE-20260410-0001',
+          total: new Decimal(100),
+          subtotal: new Decimal(100),
+          descuentos: new Decimal(0),
+          anulada: false,
+          fecha: new Date('2026-04-10'),
+          detalle_ventas: [
             {
               id: 'item-1',
-              productId: 'prod-1',
-              quantity: 1,
-              unitPrice: 100,
-              subtotal: 100,
-              productName: 'Product 1',
+              producto_id: 'prod-1',
+              cantidad: new Decimal(1),
+              precio_unitario: new Decimal(100),
+              subtotal: new Decimal(100),
             },
           ],
         },
         {
           id: 'sale-2',
-          saleNumber: 'SALE-20260415-0001',
-          totalAmount: 200,
-          paymentMethod: 'CARD',
-          status: 'completed',
-          createdAt: new Date('2026-04-15'),
-          items: [
+          numero_ticket: 'SALE-20260415-0001',
+          total: new Decimal(200),
+          anulada: false,
+          fecha: new Date('2026-04-15'),
+          detalle_ventas: [
             {
               id: 'item-2',
-              productId: 'prod-2',
-              quantity: 2,
-              unitPrice: 100,
-              subtotal: 200,
-              productName: 'Product 2',
+              producto_id: 'prod-2',
+              cantidad: new Decimal(2),
+              precio_unitario: new Decimal(100),
+              subtotal: new Decimal(200),
             },
           ],
         },
       ];
 
-      prisma.sale.findMany.mockResolvedValue(mockPrismaResults);
+      prisma.ventas.findMany.mockResolvedValue(mockPrismaResults);
 
       // Act
       const result = await repository.findByDateRange(startDate, endDate);
@@ -383,44 +398,44 @@ describe('SalesRepository', () => {
       // Assert
       expect(result).toHaveLength(2);
       expect(result[0]).toBeInstanceOf(Sale);
-      expect(prisma.sale.findMany).toHaveBeenCalledWith({
+      expect(prisma.ventas.findMany).toHaveBeenCalledWith({
         where: {
-          createdAt: {
+          fecha: {
             gte: startDate,
             lte: endDate,
           },
         },
-        include: { items: true },
-        orderBy: { createdAt: 'desc' },
+        include: { detalle_ventas: true },
+        orderBy: { fecha: 'desc' },
       });
     });
   });
 
   describe('findAll', () => {
     it('should return all sales without filters', async () => {
-      // Arrange
+      // Arrange - Spanish Prisma field names
       const mockPrismaResults = [
         {
           id: 'sale-1',
-          saleNumber: 'SALE-20260410-0001',
-          totalAmount: 100,
-          paymentMethod: 'CASH',
-          status: 'completed',
-          createdAt: new Date(),
-          items: [
+          numero_ticket: 'SALE-20260410-0001',
+          total: new Decimal(100),
+          subtotal: new Decimal(100),
+          descuentos: new Decimal(0),
+          anulada: false,
+          fecha: new Date(),
+          detalle_ventas: [
             {
               id: 'item-1',
-              productId: 'prod-1',
-              quantity: 1,
-              unitPrice: 100,
-              subtotal: 100,
-              productName: 'Product 1',
+              producto_id: 'prod-1',
+              cantidad: new Decimal(1),
+              precio_unitario: new Decimal(100),
+              subtotal: new Decimal(100),
             },
           ],
         },
       ];
 
-      prisma.sale.findMany.mockResolvedValue(mockPrismaResults);
+      prisma.ventas.findMany.mockResolvedValue(mockPrismaResults);
 
       // Act
       const result = await repository.findAll();
@@ -428,40 +443,41 @@ describe('SalesRepository', () => {
       // Assert
       expect(result).toHaveLength(1);
       expect(result[0]).toBeInstanceOf(Sale);
-      expect(prisma.sale.findMany).toHaveBeenCalledWith({
+      expect(prisma.ventas.findMany).toHaveBeenCalledWith({
         where: {},
-        include: { items: true },
-        orderBy: { createdAt: 'desc' },
+        include: { detalle_ventas: true },
+        orderBy: { fecha: 'desc' },
       });
     });
 
     it('should filter by status', async () => {
       // Arrange
-      prisma.sale.findMany.mockResolvedValue([]);
+      prisma.ventas.findMany.mockResolvedValue([]);
 
       // Act
-      await repository.findAll({ status: 'completed' });
+      await repository.findAll({ status: 'cancelled' });
 
       // Assert
-      expect(prisma.sale.findMany).toHaveBeenCalledWith({
-        where: { status: 'completed' },
-        include: { items: true },
-        orderBy: { createdAt: 'desc' },
+      expect(prisma.ventas.findMany).toHaveBeenCalledWith({
+        where: { anulada: true },
+        include: { detalle_ventas: true },
+        orderBy: { fecha: 'desc' },
       });
     });
 
     it('should filter by payment method', async () => {
       // Arrange
-      prisma.sale.findMany.mockResolvedValue([]);
+      prisma.ventas.findMany.mockResolvedValue([]);
 
       // Act
       await repository.findAll({ paymentMethod: 'CASH' });
 
       // Assert
-      expect(prisma.sale.findMany).toHaveBeenCalledWith({
-        where: { paymentMethod: 'CASH' },
-        include: { items: true },
-        orderBy: { createdAt: 'desc' },
+      // Note: paymentMethod is not stored in ventas table, so this should only have empty where
+      expect(prisma.ventas.findMany).toHaveBeenCalledWith({
+        where: {},
+        include: { detalle_ventas: true },
+        orderBy: { fecha: 'desc' },
       });
     });
 
@@ -469,21 +485,21 @@ describe('SalesRepository', () => {
       // Arrange
       const startDate = new Date('2026-04-01');
       const endDate = new Date('2026-04-30');
-      prisma.sale.findMany.mockResolvedValue([]);
+      prisma.ventas.findMany.mockResolvedValue([]);
 
       // Act
       await repository.findAll({ startDate, endDate });
 
       // Assert
-      expect(prisma.sale.findMany).toHaveBeenCalledWith({
+      expect(prisma.ventas.findMany).toHaveBeenCalledWith({
         where: {
-          createdAt: {
+          fecha: {
             gte: startDate,
             lte: endDate,
           },
         },
-        include: { items: true },
-        orderBy: { createdAt: 'desc' },
+        include: { detalle_ventas: true },
+        orderBy: { fecha: 'desc' },
       });
     });
   });

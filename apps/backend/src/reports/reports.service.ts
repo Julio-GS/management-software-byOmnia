@@ -69,12 +69,12 @@ export class ReportsService {
 
     const totalSales = sales.length;
     const totalRevenue = sales.reduce(
-      (sum, sale) => sum.add(sale.totalAmount),
+      (sum, sale) => sum.add(sale.total),
       new Decimal(0),
     );
     const productsSold = sales.reduce(
       (sum, sale) =>
-        sum + sale.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
+        sum + sale.detalle_ventas.reduce((itemSum, item) => itemSum + Number(item.cantidad), 0),
       0,
     );
     const avgTransactionValue =
@@ -82,7 +82,7 @@ export class ReportsService {
 
     // Calculate change vs previous period
     const previousRevenue = previousSales.reduce(
-      (sum, sale) => sum.add(sale.totalAmount),
+      (sum, sale) => sum.add(sale.total),
       new Decimal(0),
     );
     const changeVsYesterday = previousRevenue.greaterThan(0)
@@ -171,10 +171,10 @@ export class ReportsService {
 
     return products.map((product) => ({
       id: product.id,
-      name: product.name,
-      currentStock: product.stock,
-      minStock: product.minStock,
-      categoryName: product.category?.name,
+      name: product.detalle,
+      currentStock: product.stock_actual,
+      minStock: product.stock_minimo,
+      categoryName: product.rubros?.nombre,
     }));
   }
 

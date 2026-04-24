@@ -19,11 +19,11 @@ export class CategoriesRepository {
    * @returns Category entity or null if not found
    */
   async findById(id: string): Promise<Category | null> {
-    const data = await this.prisma.category.findUnique({
+    const data = await this.prisma.rubros.findUnique({
       where: { id },
       include: {
-        parent: true,
-        children: true,
+        rubros: true, // parent
+        other_rubros: true, // children
       },
     });
 
@@ -35,11 +35,11 @@ export class CategoriesRepository {
    * @returns Category entity or null if not found
    */
   async findByName(name: string): Promise<Category | null> {
-    const data = await this.prisma.category.findUnique({
-      where: { name },
+    const data = await this.prisma.rubros.findFirst({
+      where: { nombre: name },
       include: {
-        parent: true,
-        children: true,
+        rubros: true, // parent
+        other_rubros: true, // children
       },
     });
 
@@ -56,24 +56,24 @@ export class CategoriesRepository {
     const where: any = {};
 
     if (params?.parentId !== undefined) {
-      where.parentId = params.parentId;
+      where.parent_id = params.parentId;
     }
 
     if (params?.isActive !== undefined) {
-      where.isActive = params.isActive;
+      where.activo = params.isActive;
     }
 
-    const data = await this.prisma.category.findMany({
+    const data = await this.prisma.rubros.findMany({
       where,
       include: {
-        parent: true,
-        children: true,
+        rubros: true, // parent
+        other_rubros: true, // children
         _count: {
-          select: { products: true },
+          select: { productos: true },
         },
       },
       orderBy: {
-        name: 'asc',
+        nombre: 'asc',
       },
     });
 
@@ -91,11 +91,17 @@ export class CategoriesRepository {
       throw new ConflictException(`Category with name ${dto.name} already exists`);
     }
 
-    const data = await this.prisma.category.create({
-      data: dto,
+    const data = await this.prisma.rubros.create({
+      data: {
+        nombre: dto.name,
+        descripcion: dto.description,
+        parent_id: dto.parentId,
+        default_markup: dto.defaultMarkup,
+        activo: dto.isActive ?? true,
+      },
       include: {
-        parent: true,
-        children: true,
+        rubros: true, // parent
+        other_rubros: true, // children
       },
     });
 
@@ -122,12 +128,18 @@ export class CategoriesRepository {
       }
     }
 
-    const data = await this.prisma.category.update({
+    const data = await this.prisma.rubros.update({
       where: { id },
-      data: dto,
+      data: {
+        nombre: dto.name,
+        descripcion: dto.description,
+        parent_id: dto.parentId,
+        default_markup: dto.defaultMarkup,
+        activo: dto.isActive,
+      },
       include: {
-        parent: true,
-        children: true,
+        rubros: true, // parent
+        other_rubros: true, // children
       },
     });
 
@@ -144,14 +156,14 @@ export class CategoriesRepository {
       throw new NotFoundException(`Category with ID ${id} not found`);
     }
 
-    const data = await this.prisma.category.update({
+    const data = await this.prisma.rubros.update({
       where: { id },
       data: {
-        isActive: false,
+        activo: false,
       },
       include: {
-        parent: true,
-        children: true,
+        rubros: true, // parent
+        other_rubros: true, // children
       },
     });
 
@@ -163,18 +175,18 @@ export class CategoriesRepository {
    * Useful when business logic modifies the entity.
    */
   async save(category: Category): Promise<Category> {
-    const data = await this.prisma.category.update({
+    const data = await this.prisma.rubros.update({
       where: { id: category.id },
       data: {
-        name: category.name,
-        description: category.description,
-        parentId: category.parentId,
-        isActive: category.isActive,
-        updatedAt: category.updatedAt,
+        nombre: category.name,
+        descripcion: category.description,
+        parent_id: category.parentId,
+        activo: category.isActive,
+        updated_at: category.updatedAt,
       },
       include: {
-        parent: true,
-        children: true,
+        rubros: true, // parent
+        other_rubros: true, // children
       },
     });
 

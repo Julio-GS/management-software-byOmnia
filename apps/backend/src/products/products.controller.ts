@@ -14,16 +14,16 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
-import { ProductsService } from './products.service';
+import { ProductsEsService } from './products-es.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
-import { UpdateMarkupDto } from '../pricing/dto/update-markup.dto';
-import { PricingService } from '../pricing/pricing.service';
+// TODO: Restore when PricingService is fixed for Spanish schema
+// import { UpdateMarkupDto } from '../pricing/dto/update-markup.dto';
+// import { PricingService } from '../pricing/pricing.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { GetProductsQuery } from './queries/get-products.query';
-import { CreateProductCommand } from './commands/create-product.command';
 import { UpdateStockCommand } from './commands/update-stock.command';
 
 @ApiTags('Products')
@@ -34,8 +34,9 @@ export class ProductsController {
   constructor(
     private readonly commandBus: CommandBus,
     private readonly queryBus: QueryBus,
-    private readonly productsService: ProductsService,
-    private readonly pricingService: PricingService,
+    private readonly ProductsEsService: ProductsEsService,
+    // TODO: Restore when PricingService is fixed for Spanish schema
+    // private readonly pricingService: PricingService,
   ) {}
 
   @Post()
@@ -44,24 +45,8 @@ export class ProductsController {
   @ApiResponse({ status: 201, description: 'Product created successfully' })
   @ApiResponse({ status: 409, description: 'Product with SKU or barcode already exists' })
   create(@Body() createProductDto: CreateProductDto) {
-    return this.commandBus.execute(
-      new CreateProductCommand(
-        createProductDto.name,
-        createProductDto.description,
-        createProductDto.price,
-        createProductDto.cost,
-        createProductDto.sku,
-        createProductDto.barcode,
-        createProductDto.stock,
-        createProductDto.minStock,
-        createProductDto.maxStock,
-        createProductDto.categoryId,
-        createProductDto.markup,
-        createProductDto.taxRate,
-        createProductDto.imageUrl,
-        createProductDto.isActive,
-      ),
-    );
+    // Call service directly - CreateProductDto already uses Spanish field names
+    return this.ProductsEsService.create(createProductDto);
   }
 
   @Get()
@@ -95,7 +80,7 @@ export class ProductsController {
     }
   })
   getTotalInventoryValue() {
-    return this.productsService.getTotalInventoryValue();
+    return this.ProductsEsService.getTotalInventoryValue();
   }
 
   @Get('sku/:sku')
@@ -104,7 +89,7 @@ export class ProductsController {
   @ApiResponse({ status: 200, description: 'Product found' })
   @ApiResponse({ status: 404, description: 'Product not found' })
   findBySku(@Param('sku') sku: string) {
-    return this.productsService.findBySku(sku);
+    return this.ProductsEsService.findBySku(sku);
   }
 
   @Get('barcode/:barcode')
@@ -113,7 +98,7 @@ export class ProductsController {
   @ApiResponse({ status: 200, description: 'Product found' })
   @ApiResponse({ status: 404, description: 'Product not found' })
   findByBarcode(@Param('barcode') barcode: string) {
-    return this.productsService.findByBarcode(barcode);
+    return this.ProductsEsService.findByBarcode(barcode);
   }
 
   @Get(':id')
@@ -122,7 +107,7 @@ export class ProductsController {
   @ApiResponse({ status: 200, description: 'Product found' })
   @ApiResponse({ status: 404, description: 'Product not found' })
   findOne(@Param('id') id: string) {
-    return this.productsService.findOne(id);
+    return this.ProductsEsService.findOne(id);
   }
 
   @Patch(':id')
@@ -132,48 +117,50 @@ export class ProductsController {
   @ApiResponse({ status: 404, description: 'Product not found' })
   @ApiResponse({ status: 409, description: 'SKU or barcode conflict' })
   update(@Param('id') id: string, @Body() updateProductDto: UpdateProductDto) {
-    return this.productsService.update(id, updateProductDto);
+    return this.ProductsEsService.update(id, updateProductDto);
   }
 
-  @Put(':id/markup')
-  @Roles('manager', 'admin')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ 
-    summary: 'Update product markup',
-    description: 'Updates product-specific markup and triggers price recalculation. Set markup to null to inherit from category/global.',
-  })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Product markup updated and price recalculated',
-    schema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string', example: 'Product markup updated and price recalculated' },
-        product: { type: 'object' },
-      },
-    },
-  })
-  @ApiResponse({ status: 404, description: 'Product not found' })
-  async updateProductMarkup(
-    @Param('id') id: string,
-    @Body() updateMarkupDto: UpdateMarkupDto,
-  ) {
-    // Update the product markup
-    await this.productsService.update(id, {
-      markup: updateMarkupDto.markup,
-    });
+  // TODO: Restore when markup field is added to Spanish schema
+  // Spanish system uses precio_venta/costo directly, no markup field
+  // @Put(':id/markup')
+  // @Roles('manager', 'admin')
+  // @HttpCode(HttpStatus.OK)
+  // @ApiOperation({ 
+  //   summary: 'Update product markup',
+  //   description: 'Updates product-specific markup and triggers price recalculation. Set markup to null to inherit from category/global.',
+  // })
+  // @ApiResponse({ 
+  //   status: 200, 
+  //   description: 'Product markup updated and price recalculated',
+  //   schema: {
+  //     type: 'object',
+  //     properties: {
+  //       message: { type: 'string', example: 'Product markup updated and price recalculated' },
+  //       product: { type: 'object' },
+  //     },
+  //   },
+  // })
+  // @ApiResponse({ status: 404, description: 'Product not found' })
+  // async updateProductMarkup(
+  //   @Param('id') id: string,
+  //   @Body() updateMarkupDto: UpdateMarkupDto,
+  // ) {
+  //   // Update the product markup
+  //   await this.ProductsEsService.update(id, {
+  //     markup: updateMarkupDto.markup,
+  //   });
 
-    // Trigger price recalculation for this product
-    await this.pricingService.recalculatePriceForProduct(id);
+  //   // Trigger price recalculation for this product
+  //   await this.pricingService.recalculatePriceForProduct(id);
 
-    // Fetch updated product with new price
-    const updatedProduct = await this.productsService.findOne(id);
+  //   // Fetch updated product with new price
+  //   const updatedProduct = await this.ProductsEsService.findOne(id);
 
-    return {
-      message: 'Product markup updated and price recalculated',
-      product: updatedProduct,
-    };
-  }
+  //   return {
+  //     message: 'Product markup updated and price recalculated',
+  //     product: updatedProduct,
+  //   };
+  // }
 
   @Patch(':id/stock')
   @Roles('manager', 'admin')
@@ -203,6 +190,6 @@ export class ProductsController {
   @ApiResponse({ status: 204, description: 'Product deleted successfully' })
   @ApiResponse({ status: 404, description: 'Product not found' })
   remove(@Param('id') id: string) {
-    return this.productsService.remove(id);
+    return this.ProductsEsService.remove(id);
   }
 }

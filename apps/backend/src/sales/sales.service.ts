@@ -75,12 +75,12 @@ export class SalesService {
   }
 
   async findBySaleNumber(saleNumber: string) {
-    const sale = await this.prisma.sale.findUnique({
-      where: { saleNumber },
+    const sale = await this.prisma.ventas.findUnique({
+      where: { numero_ticket: saleNumber },
       include: {
-        items: {
+        detalle_ventas: {
           include: {
-            product: true,
+            productos: true,
           },
         },
       },
@@ -117,10 +117,10 @@ export class SalesService {
 
     const prefix = `SALE-${year}${month}${day}`;
 
-    // Get the count of sales today
-    const count = await this.prisma.sale.count({
+    // Get the count of sales today - using Spanish field: numero_ticket
+    const count = await this.prisma.ventas.count({
       where: {
-        saleNumber: {
+        numero_ticket: {
           startsWith: prefix,
         },
       },

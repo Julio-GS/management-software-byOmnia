@@ -13,8 +13,26 @@ describe('InventoryService', () => {
 
   const mockProduct = {
     id: 'prod-123',
-    stock: 100,
-    name: 'Test Product',
+    stock_actual: 100,
+    detalle: 'Test Product',
+    codigo: 'TEST-001',
+    codigo_alternativo: null,
+    codigo_barras: null,
+    proveedor_id: null,
+    rubro_id: null,
+    unidad_medida_id: null,
+    contenido: null,
+    es_codigo_especial: false,
+    requiere_precio_manual: false,
+    maneja_lotes: false,
+    costo: 60,
+    iva: 21,
+    precio_venta: 100,
+    stock_minimo: 20,
+    maneja_stock: true,
+    activo: true,
+    created_at: new Date(),
+    updated_at: new Date(),
   };
 
   const mockMovement = InventoryMovement.fromPersistence({
@@ -198,7 +216,7 @@ describe('InventoryService', () => {
 
       repository.findProductById.mockResolvedValue({
         ...mockProduct,
-        stock: 10,
+        stock_actual: 50,
       } as any);
 
       const negativeStockMovement = InventoryMovement.fromPersistence({
