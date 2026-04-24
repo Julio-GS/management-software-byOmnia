@@ -15,6 +15,10 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { PricingModule } from './pricing/pricing.module';
 import { ReportsModule } from './reports/reports.module';
+import { UnidadesMedidaModule } from './unidades-medida/unidades-medida.module';
+import { ProveedoresModule } from './proveedores/proveedores.module';
+import { RubrosModule } from './rubros/rubros.module';
+import { DevolucionesModule } from './devoluciones/devoluciones.module';
 import { GlobalErrorInterceptor } from './shared/interceptors/global-error.interceptor';
 
 @Module({
@@ -36,6 +40,12 @@ import { GlobalErrorInterceptor } from './shared/interceptors/global-error.inter
     SyncModule,
     PricingModule,
     ReportsModule,
+    // Phase 2: Master Data Modules
+    UnidadesMedidaModule,
+    ProveedoresModule,
+    RubrosModule,
+    // Phase 4: Sales Operations
+    DevolucionesModule,
   ],
   controllers: [HealthController],
   providers: [
