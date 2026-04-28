@@ -7,7 +7,6 @@ import { PrismaModule } from './database/prisma.module';
 import { OmniaCacheModule } from './cache/cache.module';
 import { LoggerModule } from './shared/logger/logger.module';
 import { ProductsModule } from './products/products.module';
-import { CategoriesModule } from './categories/categories.module';
 import { SalesModule } from './sales/sales.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { SyncModule } from './sync/sync.module';
@@ -37,7 +36,6 @@ import { GlobalErrorInterceptor } from './shared/interceptors/global-error.inter
     AuthModule,
     UsersModule,
     ProductsModule,
-    CategoriesModule,
     SalesModule,
     InventoryModule,
     SyncModule,

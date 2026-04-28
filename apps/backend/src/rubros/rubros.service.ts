@@ -1,12 +1,21 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { EventBus } from '@nestjs/cqrs';
 import { RubrosRepository } from './repositories/rubros.repository';
 import { RubroEntity } from './entities/rubro.entity';
 import { CreateRubroDto } from './dto/create-rubro.dto';
 import { UpdateRubroDto, FilterRubrosDto } from './dto/update-rubro.dto';
+import {
+  CategoryCreatedEvent,
+  CategoryUpdatedEvent,
+  CategoryDeletedEvent,
+} from '../shared/events';
 
 @Injectable()
 export class RubrosService {
-  constructor(private readonly repository: RubrosRepository) {}
+  constructor(
+    private readonly repository: RubrosRepository,
+    private readonly eventBus: EventBus,
+  ) {}
 
   async findAll(filters: FilterRubrosDto = {}): Promise<RubroEntity[]> {
     return this.repository.findAll(filters);
@@ -27,14 +36,36 @@ export class RubrosService {
   }
 
   async create(data: CreateRubroDto): Promise<RubroEntity> {
-    return this.repository.create(data);
+    const rubro = await this.repository.create(data);
+    
+    // Emit event for sync module
+    this.eventBus.publish(
+      new CategoryCreatedEvent(rubro.id, rubro.nombre, rubro.descripcion),
+    );
+
+    return rubro;
   }
 
   async update(id: string, data: UpdateRubroDto): Promise<RubroEntity> {
-    return this.repository.update(id, data);
+    const rubro = await this.repository.update(id, data);
+
+    // Emit event for sync module
+    this.eventBus.publish(
+      new CategoryUpdatedEvent(rubro.id, {
+        name: rubro.nombre,
+        description: rubro.descripcion,
+      }),
+    );
+
+    return rubro;
   }
 
   async softDelete(id: string): Promise<RubroEntity> {
-    return this.repository.softDelete(id);
+    const rubro = await this.repository.softDelete(id);
+
+    // Emit event for sync module
+    this.eventBus.publish(new CategoryDeletedEvent(rubro.id, rubro.nombre));
+
+    return rubro;
   }
 }
