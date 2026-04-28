@@ -16,7 +16,7 @@ export class UsersService {
 
   async create(createUserDto: CreateUserDto): Promise<UserEntity> {
     // Check if username already exists
-    const existingUser = await this.prisma.user.findUnique({
+    const existingUser = await this.prisma.usuarios.findUnique({
       where: { username: createUserDto.username },
     });
 
@@ -28,27 +28,29 @@ export class UsersService {
     const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
 
     // Create user
-    const user = await this.prisma.user.create({
+    const user = await this.prisma.usuarios.create({
       data: {
-        ...createUserDto,
-        password: hashedPassword,
-        role: createUserDto.role || 'cashier',
+        username: createUserDto.username,
+        email: createUserDto.email,
+        password_hash: hashedPassword,
+        rol: createUserDto.role || 'cajero',
+        nombre_completo: createUserDto.firstName && createUserDto.lastName ? `${createUserDto.firstName} ${createUserDto.lastName}` : null,
       },
     });
 
-    return new UserEntity(user);
+    return new UserEntity(user as any);
   }
 
   async findAll(): Promise<UserEntity[]> {
-    const users = await this.prisma.user.findMany({
-      orderBy: { createdAt: 'desc' },
+    const users = await this.prisma.usuarios.findMany({
+      orderBy: { created_at: 'desc' },
     });
 
-    return users.map((user) => new UserEntity(user));
+    return users.map((user) => new UserEntity(user as any));
   }
 
   async findOne(id: string): Promise<UserEntity> {
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.usuarios.findUnique({
       where: { id },
     });
 
@@ -56,50 +58,18 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
-    return new UserEntity(user);
-  }
-
-  async findByEmail(email: string): Promise<UserEntity | null> {
-    const user = await this.prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (!user) {
-      return null;
-    }
-
-    return new UserEntity(user);
-  }
-
-  // This method returns user WITH password for authentication
-  async findByEmailWithPassword(email: string) {
-    return this.prisma.user.findUnique({
-      where: { email },
-    });
-  }
-
-  async findByUsername(username: string): Promise<UserEntity | null> {
-    const user = await this.prisma.user.findUnique({
-      where: { username },
-    });
-
-    if (!user) {
-      return null;
-    }
-
-    return new UserEntity(user);
+    return new UserEntity(user as any);
   }
 
   // This method returns user WITH password for authentication
   async findByUsernameWithPassword(username: string) {
-    return this.prisma.user.findUnique({
+    return this.prisma.usuarios.findUnique({
       where: { username },
     });
   }
 
   async update(id: string, updateUserDto: UpdateUserDto): Promise<UserEntity> {
-    // Check if user exists
-    const existingUser = await this.prisma.user.findUnique({
+    const existingUser = await this.prisma.usuarios.findUnique({
       where: { id },
     });
 
@@ -107,29 +77,26 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
-    // Check email uniqueness if email is being updated
-    if (updateUserDto.email && updateUserDto.email !== existingUser.email) {
-      const emailExists = await this.prisma.user.findUnique({
-        where: { email: updateUserDto.email },
-      });
-
-      if (emailExists) {
-        throw new ConflictException('Email already exists');
-      }
+    // Update user
+    const data: any = {};
+    if (updateUserDto.email) data.email = updateUserDto.email;
+    if (updateUserDto.role) data.rol = updateUserDto.role;
+    if (updateUserDto.isActive !== undefined) data.activo = updateUserDto.isActive;
+    if (updateUserDto.firstName || updateUserDto.lastName) {
+       // It's a simplistic merge
+       data.nombre_completo = `${updateUserDto.firstName || ''} ${updateUserDto.lastName || ''}`.trim();
     }
 
-    // Update user
-    const user = await this.prisma.user.update({
+    const user = await this.prisma.usuarios.update({
       where: { id },
-      data: updateUserDto,
+      data,
     });
 
-    return new UserEntity(user);
+    return new UserEntity(user as any);
   }
 
   async remove(id: string): Promise<void> {
-    // Check if user exists
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.usuarios.findUnique({
       where: { id },
     });
 
@@ -137,10 +104,9 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
-    // Prevent deleting the last admin
-    if (user.role === 'admin') {
-      const adminCount = await this.prisma.user.count({
-        where: { role: 'admin', isActive: true },
+    if (user.rol === 'admin') {
+      const adminCount = await this.prisma.usuarios.count({
+        where: { rol: 'admin', activo: true },
       });
 
       if (adminCount <= 1) {
@@ -148,17 +114,10 @@ export class UsersService {
       }
     }
 
-    // Soft delete (deactivate user)
-    await this.prisma.user.update({
+    // Soft delete
+    await this.prisma.usuarios.update({
       where: { id },
-      data: { isActive: false },
-    });
-  }
-
-  async updateLastLogin(userId: string): Promise<void> {
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { lastLogin: new Date() },
+      data: { activo: false },
     });
   }
 }

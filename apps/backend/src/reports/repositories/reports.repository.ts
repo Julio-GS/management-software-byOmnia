@@ -1,41 +1,171 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
+import { Prisma } from '@prisma/client';
+import { QueryStockActualDto } from '../dto/query-stock-actual.dto';
+import { QueryProximosVencerDto } from '../dto/query-proximos-vencer.dto';
+import { QuerySinMovimientoDto } from '../dto/query-sin-movimiento.dto';
+import { QueryVentasDiariasDto } from '../dto/query-ventas-diarias.dto';
+import { QueryEfectividadPromocionesDto } from '../dto/query-efectividad-promociones.dto';
 
 @Injectable()
 export class ReportsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getSalesSummary(startDate: Date, endDate: Date) {
-    const sales = await this.prisma.ventas.findMany({
-      where: {
-        fecha: {
-          gte: startDate,
-          lte: endDate,
-        },
-        anulada: false,
-      },
-      include: {
-        detalle_ventas: true,
-      },
-    });
+  // ---------------------------------------------------------
+  // VIEWS (SPEC_05_REPORTS.md)
+  // ---------------------------------------------------------
 
-    return sales;
+  async getStockActual(query: QueryStockActualDto) {
+    const stockBajo = query.stock_bajo !== undefined ? query.stock_bajo : null;
+    return this.prisma.$queryRaw`
+      SELECT 
+        producto_id,
+        codigo,
+        detalle,
+        stock_total,
+        lotes_activos,
+        proximo_vencimiento,
+        stock_bajo,
+        stock_minimo
+      FROM v_stock_actual
+      WHERE (${stockBajo}::boolean IS NULL OR stock_bajo = ${stockBajo})
+      ORDER BY stock_total ASC, detalle ASC
+    `;
   }
 
-  async getSalesSummaryForPreviousPeriod(startDate: Date, endDate: Date) {
-    const duration = endDate.getTime() - startDate.getTime();
-    const previousStart = new Date(startDate.getTime() - duration);
-    const previousEnd = new Date(endDate.getTime() - duration);
+  async getProximosVencer(query: QueryProximosVencerDto) {
+    const dias = query.dias ?? 15;
 
-    return this.getSalesSummary(previousStart, previousEnd);
+    return this.prisma.$queryRaw`
+      SELECT 
+        codigo,
+        detalle,
+        rubro_nombre,
+        numero_lote,
+        fecha_vencimiento,
+        cantidad_actual,
+        dias_hasta_vencimiento
+      FROM v_productos_proximos_vencer
+      WHERE dias_hasta_vencimiento <= ${dias}
+      ORDER BY dias_hasta_vencimiento ASC
+    `;
   }
+
+  async getSinMovimiento(query: QuerySinMovimientoDto) {
+    const dias = query.dias ?? 30;
+
+    return this.prisma.$queryRaw`
+      SELECT 
+        producto_id,
+        codigo,
+        detalle,
+        rubro_nombre,
+        stock_actual,
+        precio_venta,
+        ultima_venta,
+        dias_sin_venta
+      FROM v_productos_sin_movimiento
+      WHERE dias_sin_venta >= ${dias}
+      ORDER BY dias_sin_venta DESC NULLS FIRST
+    `;
+  }
+
+  async getPromocionesVigentes() {
+    return this.prisma.$queryRaw`
+      SELECT 
+        id,
+        nombre,
+        tipo,
+        valor_descuento,
+        acumulable,
+        fecha_inicio,
+        fecha_fin,
+        hora_inicio,
+        hora_fin,
+        dias_semana,
+        cantidad_maxima_cliente,
+        productos_incluidos,
+        prioridad
+      FROM v_promociones_vigentes
+      ORDER BY prioridad DESC, fecha_inicio DESC
+    `;
+  }
+
+  async getVentasDiarias(query: QueryVentasDiariasDto) {
+    const where = [];
+    
+    if (query.fecha_desde) {
+      where.push(`fecha >= '${query.fecha_desde}'::date`);
+    }
+    if (query.fecha_hasta) {
+      where.push(`fecha <= '${query.fecha_hasta}'::date`);
+    }
+    // Note: medio_pago filter would ideally filter by joining, but the view aggregates all.
+    // If we need to filter by medio_pago specifically, we could adjust the SQL dynamically,
+    // but the SPEC just says to return the aggregated daily view. We'll filter dates.
+
+    const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+
+    return this.prisma.$queryRawUnsafe(`
+      SELECT 
+        fecha,
+        cantidad_tickets,
+        cantidad_transacciones,
+        total_vendido,
+        total_descuentos,
+        ticket_promedio,
+        total_efectivo,
+        total_debito,
+        total_credito,
+        total_transferencia,
+        total_qr
+      FROM v_ventas_diarias
+      ${whereClause}
+      ORDER BY fecha DESC
+    `);
+  }
+
+  async getEfectividadPromociones(query: QueryEfectividadPromocionesDto) {
+    const where = [];
+
+    if (query.promocion_id) {
+      where.push(`promocion_id = '${query.promocion_id}'::uuid`);
+    }
+    if (query.fecha_desde) {
+      where.push(`fecha_inicio >= '${query.fecha_desde}'::date`);
+    }
+    if (query.fecha_hasta) {
+      where.push(`fecha_fin <= '${query.fecha_hasta}'::date`);
+    }
+
+    const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+
+    return this.prisma.$queryRawUnsafe(`
+      SELECT 
+        promocion_id,
+        promocion_nombre,
+        promocion_tipo,
+        fecha_inicio,
+        fecha_fin,
+        ventas_con_promocion,
+        unidades_vendidas,
+        revenue_generado,
+        descuento_otorgado,
+        ticket_promedio,
+        ROUND((descuento_otorgado / NULLIF(revenue_generado, 0) * 100)::numeric, 2) AS porcentaje_descuento
+      FROM v_efectividad_promociones
+      ${whereClause}
+      ORDER BY revenue_generado DESC
+    `);
+  }
+
+  // ---------------------------------------------------------
+  // DASHBOARD SUPPORT (Legacy / Existing Handlers Support)
+  // ---------------------------------------------------------
 
   /**
    * Query sales summary from materialized view dashboard_metrics
-   * @param startDate - Start date of the period
-   * @param endDate - End date of the period
-   * @returns Aggregated metrics from the materialized view
    */
   async getSalesSummaryFromView(startDate: Date, endDate: Date) {
     const result = await this.prisma.$queryRaw<
@@ -53,194 +183,6 @@ export class ReportsRepository {
     `;
 
     return result;
-  }
-
-  async getTopProducts(startDate: Date, endDate: Date, limit: number = 10) {
-    const result = await this.prisma.detalle_ventas.groupBy({
-      by: ['producto_id'],
-      where: {
-        venta: {
-          created_at: {
-            gte: startDate,
-            lte: endDate,
-          },
-          estado: 'completed',
-        },
-      },
-      _sum: {
-        cantidad: true,
-        subtotal: true,
-      },
-      orderBy: {
-        _sum: {
-          cantidad: 'desc',
-        },
-      },
-      take: limit,
-    });
-
-    // Fetch product details
-    const productsData = await Promise.all(
-      result.map(async (item) => {
-        const product = await this.prisma.productos.findUnique({
-          where: { id: item.producto_id },
-        });
-        return {
-          productId: item.producto_id,
-          name: product?.detalle || 'Unknown',
-          quantitySold: item._sum.cantidad || 0,
-          revenue: item._sum.subtotal || new Decimal(0),
-        };
-      }),
-    );
-
-    return productsData;
-  }
-
-  async getLowStockProducts(threshold?: number) {
-    const products = await this.prisma.productos.findMany({
-      where: {
-        activo: true,
-        maneja_stock: true,
-      },
-      include: {
-        rubros: true,
-        lotes: {
-          where: {
-            activo: true,
-          },
-        },
-      },
-    });
-
-    // Calculate stock_actual from lotes and filter
-    return products
-      .map((p) => ({
-        ...p,
-        stock_actual: p.lotes.reduce((sum, lote) => sum + lote.cantidad_actual, 0),
-      }))
-      .filter((p) => {
-        const compareValue = threshold !== undefined ? threshold : p.stock_minimo || 0;
-        return p.stock_actual <= compareValue;
-      })
-      .sort((a, b) => a.stock_actual - b.stock_actual);
-  }
-
-  async getStockRotation(days: number = 30) {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-
-    const salesData = await this.prisma.detalle_ventas.groupBy({
-      by: ['producto_id'],
-      where: {
-        venta: {
-          created_at: {
-            gte: startDate,
-          },
-          estado: 'completed',
-        },
-      },
-      _sum: {
-        cantidad: true,
-      },
-    });
-
-    const rotationData = await Promise.all(
-      salesData.map(async (item) => {
-        const product = await this.prisma.productos.findUnique({
-          where: { id: item.producto_id },
-          include: {
-            lotes: {
-              where: { activo: true },
-            },
-          },
-        });
-
-        if (!product) return null;
-
-        const totalSold = Number(item._sum.cantidad) || 0;
-        const averageDailySales = totalSold / days;
-        const currentStock = product.lotes.reduce((sum, lote) => sum + lote.cantidad_actual, 0);
-        const daysUntilStockout =
-          averageDailySales > 0 ? currentStock / averageDailySales : Infinity;
-        const rotationRate = currentStock > 0 ? totalSold / currentStock : 0;
-
-
-        return {
-          productId: product.id,
-          productName: product.detalle,
-          averageDailySales,
-          currentStock,
-          daysUntilStockout: daysUntilStockout === Infinity ? -1 : daysUntilStockout,
-          rotationRate,
-        };
-      }),
-    );
-
-    return rotationData.filter((item) => item !== null);
-  }
-
-  async getRevenueByCategory(startDate: Date, endDate: Date) {
-    const salesItems = await this.prisma.detalle_ventas.findMany({
-      where: {
-        ventas: {
-          fecha: {
-            gte: startDate,
-            lte: endDate,
-          },
-          anulada: false,
-        },
-      },
-      include: {
-        productos: {
-          include: {
-            rubros: true,
-          },
-        },
-      },
-    });
-
-    // Group by category
-    const categoryMap = new Map<
-      string,
-      { name: string; revenue: Decimal; count: number }
-    >();
-
-    salesItems.forEach((item) => {
-      const categoryId = item.productos.rubro_id || 'uncategorized';
-      const categoryName = item.productos.rubros?.nombre || 'Sin Categoría';
-
-      if (!categoryMap.has(categoryId)) {
-        categoryMap.set(categoryId, {
-          name: categoryName,
-          revenue: new Decimal(0),
-          count: 0,
-      });
-      }
-
-      const existing = categoryMap.get(categoryId)!;
-      existing.revenue = existing.revenue.add(item.subtotal);
-      existing.count += 1;
-    });
-
-    // Calculate total for percentages
-    let totalRevenue = new Decimal(0);
-    categoryMap.forEach((value) => {
-      totalRevenue = totalRevenue.add(value.revenue);
-    });
-
-    // Convert to array with percentages
-    const result = Array.from(categoryMap.entries()).map(([id, data]) => ({
-      categoryId: id,
-      categoryName: data.name,
-      revenue: data.revenue,
-      salesCount: data.count,
-      percentage: totalRevenue.greaterThan(0)
-        ? data.revenue.dividedBy(totalRevenue).times(100).toNumber()
-        : 0,
-    }));
-
-    return result.sort((a, b) => b.revenue.minus(a.revenue).toNumber());
   }
 
   async getSalesTrends(days: number = 7) {

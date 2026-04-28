@@ -1,47 +1,29 @@
 import { Module } from '@nestjs/common';
-import { CqrsModule } from '@nestjs/cqrs';
 import { JwtModule } from '@nestjs/jwt';
-import { SyncService } from './sync.service';
 import { SyncController } from './sync.controller';
-import { SyncGateway } from './sync.gateway';
-import { WebSocketNotificationService } from './services/websocket-notification.service';
-import {
-  ProductCreatedHandler,
-  ProductUpdatedHandler,
-  ProductDeletedHandler,
-  CategoryUpdatedHandler,
-  InventoryMovementHandler,
-  PricingRecalculatedHandler,
-} from './handlers';
+import { BatchPushService } from './services/batch-push.service';
+import { PullService } from './services/pull.service';
+import { SalesModule } from '../sales/sales.module';
+import { PrismaModule } from '../database/prisma.module';
 
-const EventHandlers = [
-  ProductCreatedHandler,
-  ProductUpdatedHandler,
-  ProductDeletedHandler,
-  CategoryUpdatedHandler,
-  InventoryMovementHandler,
-  PricingRecalculatedHandler,
-];
-
+/**
+ * SyncModule
+ *
+ * Responsabilidades:
+ *  - batch-push: recibir ventas offline del Electron y procesarlas
+ *  - pull: enviar delta de cambios al Electron para actualizar su SQLite
+ */
 @Module({
   imports: [
-    CqrsModule,
+    PrismaModule,
+    SalesModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'your-secret-key',
       signOptions: { expiresIn: '7d' },
     }),
   ],
   controllers: [SyncController],
-  providers: [
-    SyncService,
-    SyncGateway,
-    WebSocketNotificationService,
-    {
-      provide: 'NOTIFICATION_SERVICE',
-      useClass: WebSocketNotificationService,
-    },
-    ...EventHandlers,
-  ],
-  exports: [SyncService, SyncGateway, 'NOTIFICATION_SERVICE'],
+  providers: [BatchPushService, PullService],
+  exports: [BatchPushService, PullService],
 })
 export class SyncModule {}

@@ -4,29 +4,12 @@ import { SalesService } from './sales.service';
 import { SalesController } from './sales.controller';
 import { SalesRepository } from './repositories/sales.repository';
 import { PrismaModule } from '../database/prisma.module';
-import { SyncModule } from '../sync/sync.module';
-import { SaleCreatedHandler } from './handlers/sale-created.handler';
-import { SaleCancelledHandler } from './handlers/sale-cancelled.handler';
-import { CreateSaleHandler, CancelSaleHandler } from './commands/handlers';
-import { GetSalesHandler, GetSaleByNumberHandler } from './queries/handlers';
-
-const EventHandlers = [SaleCreatedHandler, SaleCancelledHandler];
-const CommandHandlers = [CreateSaleHandler, CancelSaleHandler];
-const QueryHandlers = [GetSalesHandler, GetSaleByNumberHandler];
+import { PromocionesModule } from '../promociones/promociones.module';
 
 @Module({
-  imports: [CqrsModule, PrismaModule, SyncModule],
+  imports: [CqrsModule, PrismaModule, PromocionesModule],
   controllers: [SalesController],
-  providers: [
-    SalesService,
-    {
-      provide: 'ISalesRepository',
-      useClass: SalesRepository,
-    },
-    ...EventHandlers,
-    ...CommandHandlers, // CQRS command handlers
-    ...QueryHandlers, // CQRS query handlers
-  ],
+  providers: [SalesService, SalesRepository],
   exports: [SalesService],
 })
 export class SalesModule {}

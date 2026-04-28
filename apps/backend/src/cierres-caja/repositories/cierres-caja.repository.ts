@@ -26,7 +26,7 @@ export class CierresCajaRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(filters: FilterCierresCajaDto): Promise<CierreCaja[]> {
-    const where: Prisma.CierresCajaWhereInput = {
+    const where: Prisma.cierres_cajaWhereInput = {
       caja_id: filters.caja_id,
       fecha: filters.fecha
         ? new Date(filters.fecha)

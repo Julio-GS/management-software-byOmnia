@@ -39,7 +39,7 @@ export interface SaleItem {
  * Sale entity - represents a completed transaction
  */
 export interface Sale extends BaseEntity {
-  saleNumber: string;
+  numero_ticket: string;
   paymentMethod: PaymentMethod;
   status: SaleStatus;
   subtotal: number;
@@ -55,7 +55,7 @@ export interface Sale extends BaseEntity {
   caeNumber: string | null;
   caeDueDate: string | null;
   synced: boolean;
-  items: SaleItem[];
+  detalle_ventas: SaleItem[];
 }
 
 /**
@@ -80,7 +80,7 @@ export interface CreateSaleDto {
   notes?: string;
   cashierId?: string;
   deviceId?: string;
-  items: CreateSaleItemDto[];
+  detalle_ventas: CreateSaleItemDto[];
 }
 
 /**
@@ -133,7 +133,7 @@ export interface DailySalesReport {
 export interface RefundSaleDto {
   saleId: string;
   reason: string;
-  items?: Array<{
+  detalle_ventas?: Array<{
     saleItemId: string;
     quantity: number;
   }>;
@@ -144,7 +144,7 @@ export interface RefundSaleDto {
  */
 export interface CancelSaleResponse {
   id: string;
-  saleNumber: string;
+  numero_ticket: string;
   status: 'cancelled';
   updatedAt: string;
 }

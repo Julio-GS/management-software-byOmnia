@@ -25,6 +25,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { GetProductsQuery } from './queries/get-products.query';
 import { UpdateStockCommand } from './commands/update-stock.command';
+import { UserRole } from '../auth/enums/user-role.enum';
 
 @ApiTags('Products')
 @ApiBearerAuth()
@@ -40,7 +41,7 @@ export class ProductsController {
   ) {}
 
   @Post()
-  @Roles('manager', 'admin')
+  @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Create a new product' })
   @ApiResponse({ status: 201, description: 'Product created successfully' })
   @ApiResponse({ status: 409, description: 'Product with SKU or barcode already exists' })
@@ -50,7 +51,7 @@ export class ProductsController {
   }
 
   @Get()
-  @Roles('cashier', 'manager', 'admin')
+  @Roles(UserRole.CAJERO, UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get all products' })
   @ApiQuery({ name: 'categoryId', required: false })
   @ApiQuery({ name: 'isActive', required: false, type: Boolean })
@@ -67,7 +68,7 @@ export class ProductsController {
   }
 
   @Get('total-value')
-  @Roles('cashier', 'manager', 'admin')
+  @Roles(UserRole.CAJERO, UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get total inventory value' })
   @ApiResponse({ 
     status: 200, 
@@ -84,7 +85,7 @@ export class ProductsController {
   }
 
   @Get('sku/:sku')
-  @Roles('cashier', 'manager', 'admin')
+  @Roles(UserRole.CAJERO, UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get product by SKU' })
   @ApiResponse({ status: 200, description: 'Product found' })
   @ApiResponse({ status: 404, description: 'Product not found' })
@@ -93,7 +94,7 @@ export class ProductsController {
   }
 
   @Get('barcode/:barcode')
-  @Roles('cashier', 'manager', 'admin')
+  @Roles(UserRole.CAJERO, UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get product by barcode' })
   @ApiResponse({ status: 200, description: 'Product found' })
   @ApiResponse({ status: 404, description: 'Product not found' })
@@ -102,7 +103,7 @@ export class ProductsController {
   }
 
   @Get(':id')
-  @Roles('cashier', 'manager', 'admin')
+  @Roles(UserRole.CAJERO, UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get product by ID' })
   @ApiResponse({ status: 200, description: 'Product found' })
   @ApiResponse({ status: 404, description: 'Product not found' })
@@ -111,7 +112,7 @@ export class ProductsController {
   }
 
   @Patch(':id')
-  @Roles('manager', 'admin')
+  @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Update product' })
   @ApiResponse({ status: 200, description: 'Product updated successfully' })
   @ApiResponse({ status: 404, description: 'Product not found' })
@@ -123,7 +124,7 @@ export class ProductsController {
   // TODO: Restore when markup field is added to Spanish schema
   // Spanish system uses precio_venta/costo directly, no markup field
   // @Put(':id/markup')
-  // @Roles('manager', 'admin')
+  // @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   // @HttpCode(HttpStatus.OK)
   // @ApiOperation({ 
   //   summary: 'Update product markup',
@@ -163,7 +164,7 @@ export class ProductsController {
   // }
 
   @Patch(':id/stock')
-  @Roles('manager', 'admin')
+  @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Update product stock' })
   @ApiResponse({ status: 200, description: 'Stock updated successfully' })
   @ApiResponse({ status: 404, description: 'Product not found' })
@@ -184,7 +185,7 @@ export class ProductsController {
   }
 
   @Delete(':id')
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete product (soft delete)' })
   @ApiResponse({ status: 204, description: 'Product deleted successfully' })

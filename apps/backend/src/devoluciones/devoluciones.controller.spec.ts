@@ -1,11 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { CommandBus } from '@nestjs/cqrs';
 import { DevolucionesController } from './devoluciones.controller';
 import { DevolucionesService } from './devoluciones.service';
 import { CreateDevolucionDto, FilterDevolucionesDto } from './dto';
+import { ProcesarDevolucionCommand } from './commands/procesar-devolucion.command';
 
 describe('DevolucionesController', () => {
   let controller: DevolucionesController;
   let service: DevolucionesService;
+  let commandBus: CommandBus;
 
   const mockUserId = '123e4567-e89b-12d3-a456-426614174004';
   const mockUser = {
@@ -48,6 +51,10 @@ describe('DevolucionesController', () => {
     findByVenta: jest.fn(),
   };
 
+  const mockCommandBus = {
+    execute: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [DevolucionesController],
@@ -56,11 +63,16 @@ describe('DevolucionesController', () => {
           provide: DevolucionesService,
           useValue: mockService,
         },
+        {
+          provide: CommandBus,
+          useValue: mockCommandBus,
+        },
       ],
     }).compile();
 
     controller = module.get<DevolucionesController>(DevolucionesController);
     service = module.get<DevolucionesService>(DevolucionesService);
+    commandBus = module.get<CommandBus>(CommandBus);
   });
 
   afterEach(() => {
@@ -180,6 +192,74 @@ describe('DevolucionesController', () => {
       expect(metadata).toContain('cajero');
       expect(metadata).toContain('encargado');
       expect(metadata).toContain('admin');
+    });
+  });
+
+  describe('procesarDevolucion (CQRS endpoint)', () => {
+    it('should process devolucion via CommandBus and return result', async () => {
+      const dto = {
+        ventaId: '123e4567-e89b-12d3-a456-426614174000',
+        productoId: '123e4567-e89b-12d3-a456-426614174001',
+        cantidadDevuelta: 3,
+        motivoDevolucion: 'Producto defectuoso - embalaje roto',
+      };
+
+      const expectedResult = {
+        id: '123e4567-e89b-12d3-a456-426614174003',
+        venta_id: 123,
+        producto_id: 456,
+        cantidad: 3,
+        monto_devuelto: 270,
+        motivo: 'Producto defectuoso - embalaje roto',
+      };
+
+      mockCommandBus.execute.mockResolvedValue(expectedResult);
+
+      const result = await controller.procesarDevolucion(dto);
+
+      expect(result).toEqual(expectedResult);
+      expect(mockCommandBus.execute).toHaveBeenCalledTimes(1);
+      expect(mockCommandBus.execute).toHaveBeenCalledWith(
+        expect.any(ProcesarDevolucionCommand),
+      );
+    });
+
+    it('should throw error when CommandBus fails validation', async () => {
+      const dto = {
+        ventaId: '123e4567-e89b-12d3-a456-426614174000',
+        productoId: '123e4567-e89b-12d3-a456-426614174001',
+        cantidadDevuelta: 10, // cantidad excedida
+        motivoDevolucion: 'Motivo válido',
+      };
+
+      mockCommandBus.execute.mockRejectedValue(
+        new Error('No se puede devolver más de lo comprado'),
+      );
+
+      await expect(controller.procesarDevolucion(dto)).rejects.toThrow(
+        'No se puede devolver más de lo comprado',
+      );
+      expect(mockCommandBus.execute).toHaveBeenCalledTimes(1);
+    });
+
+    it('should pass correct command parameters to CommandBus', async () => {
+      const dto = {
+        ventaId: '123e4567-e89b-12d3-a456-426614174000',
+        productoId: '123e4567-e89b-12d3-a456-426614174001',
+        cantidadDevuelta: 2,
+        motivoDevolucion: 'Cliente no satisfecho',
+      };
+
+      mockCommandBus.execute.mockResolvedValue({});
+
+      await controller.procesarDevolucion(dto);
+
+      const executedCommand = mockCommandBus.execute.mock.calls[0][0];
+      expect(executedCommand).toBeInstanceOf(ProcesarDevolucionCommand);
+      expect(executedCommand.venta_id).toBe(dto.ventaId);
+      expect(executedCommand.producto_id).toBe(dto.productoId);
+      expect(executedCommand.cantidad).toBe(dto.cantidadDevuelta);
+      expect(executedCommand.motivo).toBe(dto.motivoDevolucion);
     });
   });
 });

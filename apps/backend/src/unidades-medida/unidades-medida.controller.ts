@@ -17,6 +17,7 @@ import { UnidadesMedidaService } from './unidades-medida.service';
 import { CreateUnidadMedidaDto } from './dto/create-unidad-medida.dto';
 import { UpdateUnidadMedidaDto } from './dto/update-unidad-medida.dto';
 import { FilterUnidadesMedidaDto } from './dto/filter-unidades-medida.dto';
+import { UserRole } from '../auth/enums/user-role.enum';
 
 @ApiTags('unidades-medida')
 @Controller('api/v1/unidades-medida')
@@ -43,7 +44,7 @@ export class UnidadesMedidaController {
   }
 
   @Post()
-  @Roles('admin', 'encargado')
+  @Roles(UserRole.ADMIN, UserRole.ENCARGADO)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create new unidad de medida' })
   @ApiResponse({ status: 201, description: 'Created' })
@@ -53,7 +54,7 @@ export class UnidadesMedidaController {
   }
 
   @Patch(':id')
-  @Roles('admin', 'encargado')
+  @Roles(UserRole.ADMIN, UserRole.ENCARGADO)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update unidad de medida' })
   @ApiResponse({ status: 200, description: 'Updated' })
@@ -66,7 +67,7 @@ export class UnidadesMedidaController {
   }
 
   @Delete(':id')
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Soft delete unidad de medida' })
   @ApiResponse({ status: 200, description: 'Deleted' })

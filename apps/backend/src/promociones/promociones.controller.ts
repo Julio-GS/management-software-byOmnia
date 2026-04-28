@@ -23,6 +23,7 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../auth/enums/user-role.enum';
 
 @ApiTags('Promociones')
 @ApiBearerAuth()
@@ -38,7 +39,7 @@ export class PromocionesController {
    * GET /api/v1/promociones - List all promotions
    */
   @Get()
-  @Roles('manager', 'admin')
+  @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'List all promotions' })
   @ApiResponse({ status: 200, description: 'Promotions list' })
   async findAll(
@@ -51,7 +52,7 @@ export class PromocionesController {
    * GET /api/v1/promociones/vigentes - Currently active promotions
    */
   @Get('vigentes')
-  @Roles('cashier', 'manager', 'admin')
+  @Roles(UserRole.CAJERO, UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get currently active promotions' })
   @ApiResponse({ status: 200, description: 'Active promotions' })
   async findVigentes(): Promise<any[]> {
@@ -62,7 +63,7 @@ export class PromocionesController {
    * GET /api/v1/promociones/:id - Get a promotion
    */
   @Get(':id')
-  @Roles('manager', 'admin')
+  @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get a promotion by ID' })
   @ApiResponse({ status: 200, description: 'Promotion details' })
   @ApiResponse({ status: 404, description: 'Promotion not found' })
@@ -74,7 +75,7 @@ export class PromocionesController {
    * GET /api/v1/promociones/:id/productos - Get products in a promotion
    */
   @Get(':id/productos')
-  @Roles('manager', 'admin')
+  @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get products in a promotion' })
   @ApiResponse({ status: 200, description: 'Product IDs' })
   async getProductos(@Param('id') id: string): Promise<{ productos: string[] }> {
@@ -86,7 +87,7 @@ export class PromocionesController {
    * POST /api/v1/promociones - Create a promotion
    */
   @Post()
-  @Roles('manager', 'admin')
+  @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Create a new promotion' })
   @ApiResponse({ status: 201, description: 'Promotion created' })
   async create(@Body() data: CreatePromocionDto): Promise<any> {
@@ -97,7 +98,7 @@ export class PromocionesController {
    * PATCH /api/v1/promociones/:id - Update a promotion
    */
   @Patch(':id')
-  @Roles('manager', 'admin')
+  @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Update a promotion' })
   @ApiResponse({ status: 200, description: 'Promotion updated' })
   async update(
@@ -111,7 +112,7 @@ export class PromocionesController {
    * DELETE /api/v1/promociones/:id - Soft delete a promotion
    */
   @Delete(':id')
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Soft delete a promotion' })
   @ApiResponse({ status: 204, description: 'Promotion deleted' })
@@ -123,7 +124,7 @@ export class PromocionesController {
    * POST /api/v1/promociones/:id/productos - Add products to promotion
    */
   @Post(':id/productos')
-  @Roles('manager', 'admin')
+  @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Add products to promotion' })
   @ApiResponse({ status: 201, description: 'Products added' })
   async addProductos(
@@ -138,7 +139,7 @@ export class PromocionesController {
    * DELETE /api/v1/promociones/:id/productos - Remove products from promotion
    */
   @Delete(':id/productos')
-  @Roles('manager', 'admin')
+  @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Remove products from promotion' })
   @ApiResponse({ status: 200, description: 'Products removed' })
   async removeProductos(

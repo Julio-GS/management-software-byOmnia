@@ -8,6 +8,7 @@ import { ProveedoresService } from './proveedores.service';
 import { CreateProveedorDto } from './dto/create-proveedor.dto';
 import { UpdateProveedorDto } from './dto/update-proveedor.dto';
 import { FilterProveedoresDto } from './dto/filter-proveedores.dto';
+import { UserRole } from '../auth/enums/user-role.enum';
 
 @ApiTags('proveedores')
 @Controller('api/v1/proveedores')
@@ -43,7 +44,7 @@ export class ProveedoresController {
   }
 
   @Post()
-  @Roles('admin', 'encargado')
+  @Roles(UserRole.ADMIN, UserRole.ENCARGADO)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create new proveedor' })
   @ApiResponse({ status: 201, description: 'Created' })
@@ -53,7 +54,7 @@ export class ProveedoresController {
   }
 
   @Patch(':id')
-  @Roles('admin', 'encargado')
+  @Roles(UserRole.ADMIN, UserRole.ENCARGADO)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update proveedor' })
   @ApiResponse({ status: 200, description: 'Updated' })
@@ -63,7 +64,7 @@ export class ProveedoresController {
   }
 
   @Delete(':id')
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Soft delete proveedor' })
   @ApiResponse({ status: 200, description: 'Deleted' })

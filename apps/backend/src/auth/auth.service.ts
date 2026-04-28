@@ -8,7 +8,6 @@ import { UserEntity } from '../users/entities/user.entity';
 import { PinoLogger } from 'nestjs-pino';
 import * as bcrypt from 'bcrypt';
 
-// AuthResponse uses UserEntity which has role as string for backend flexibility
 export interface AuthResponse {
   access_token: string;
   refresh_token: string;
@@ -37,13 +36,13 @@ export class AuthService {
     }
 
     // Check if user is active
-    if (!user.isActive) {
+    if (!user.activo) {
       this.logger.warn({ username, userId: user.id }, 'Inactive user attempted login');
       throw new UnauthorizedException('User account is inactive');
     }
 
     // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
 
     if (!isPasswordValid) {
       this.logger.warn({ username, userId: user.id }, 'Invalid password attempt');
@@ -53,7 +52,7 @@ export class AuthService {
     this.logger.info({ username, userId: user.id }, 'User validated successfully');
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password: _, ...result } = user;
+    const { password_hash: _, ...result } = user;
     return result;
   }
 
@@ -64,9 +63,6 @@ export class AuthService {
       this.logger.warn({ username: loginDto.username }, 'Login failed: Invalid credentials');
       throw new UnauthorizedException('Invalid credentials');
     }
-
-    // Update last login
-    await this.usersService.updateLastLogin(user.id);
 
     // Generate tokens
     const tokens = await this.generateTokens(user);
@@ -104,7 +100,7 @@ export class AuthService {
       // Verify user still exists and is active
       const user = await this.usersService.findOne(payload.sub);
 
-      if (!user || !user.isActive) {
+      if (!user || !user.activo) {
         this.logger.warn({ userId: payload.sub }, 'Refresh token rejected: User inactive or not found');
         throw new UnauthorizedException('User is inactive or does not exist');
       }
@@ -114,7 +110,7 @@ export class AuthService {
         {
           sub: user.id,
           username: user.username,
-          role: user.role,
+          role: user.rol,
         },
         {
           secret: this.configService.get<string>('JWT_SECRET'),
@@ -125,7 +121,7 @@ export class AuthService {
       this.logger.info({ userId: user.id }, 'Access token refreshed successfully');
 
       return { access_token };
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error({ error: error.message }, 'Refresh token validation failed');
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
@@ -138,7 +134,7 @@ export class AuthService {
     const payload = {
       sub: user.id,
       username: user.username,
-      role: user.role,
+      role: user.rol,
     };
 
     const [access_token, refresh_token] = await Promise.all([

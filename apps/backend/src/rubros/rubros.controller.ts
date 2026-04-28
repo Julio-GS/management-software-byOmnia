@@ -7,9 +7,10 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { RubrosService } from './rubros.service';
 import { CreateRubroDto } from './dto/create-rubro.dto';
 import { UpdateRubroDto, FilterRubrosDto } from './dto/update-rubro.dto';
+import { UserRole } from '../auth/enums/user-role.enum';
 
 @ApiTags('rubros')
-@Controller('api/v1/rubros')
+@Controller('/rubros')
 export class RubrosController {
   constructor(private readonly service: RubrosService) {}
 
@@ -50,7 +51,7 @@ export class RubrosController {
   }
 
   @Post()
-  @Roles('admin', 'encargado')
+  @Roles(UserRole.ADMIN, UserRole.ENCARGADO)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create new rubro' })
   @ApiResponse({ status: 201, description: 'Created' })
@@ -60,7 +61,7 @@ export class RubrosController {
   }
 
   @Patch(':id')
-  @Roles('admin', 'encargado')
+  @Roles(UserRole.ADMIN, UserRole.ENCARGADO)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update rubro' })
   @ApiResponse({ status: 200, description: 'Updated' })
@@ -70,7 +71,7 @@ export class RubrosController {
   }
 
   @Delete(':id')
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Soft delete rubro (validates no active children)' })
   @ApiResponse({ status: 200, description: 'Deleted' })

@@ -1,64 +1,103 @@
-import { IsUUID, IsOptional, IsString, IsArray, ValidateNested, ArrayMinSize } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  Min,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
-import { ApiProperty } from '@nestjs/swagger';
-import { TicketItemDto } from './ticket-item.dto';
-import { MedioPagoDto } from './medio-pago.dto';
 
-/**
- * CreateVentaDto
- * 
- * DTO para crear una venta completa según SPEC_04.
- * Soporta:
- * - Múltiples items con FEFO automático
- * - Split tickets (múltiples medios de pago)
- * - Precio manual para productos F/V/P/C
- * - Promociones automáticas
- */
+export class TicketItemDto {
+  @IsUUID()
+  producto_id: string;
+
+  @IsOptional()
+  @IsUUID()
+  lote_id?: string; // Opcional: si no se provee, FEFO selecciona automático
+
+  @IsNumber()
+  @Min(0.001)
+  cantidad: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.01)
+  @Max(999999)
+  precio_manual?: number; // REQUERIDO para productos F/V/P/C
+}
+
+export class MedioPagoDto {
+  @IsIn(['efectivo', 'debito', 'credito', 'transferencia', 'qr'])
+  medio_pago: string;
+
+  @IsNumber()
+  @Min(0.01)
+  monto: number;
+}
+
 export class CreateVentaDto {
-  @ApiProperty({
-    description: 'ID de la caja donde se realiza la venta',
-    example: '550e8400-e29b-41d4-a716-446655440001',
-  })
   @IsUUID()
   caja_id: string;
 
-  @ApiProperty({
-    description: 'ID de transacción (para split tickets - múltiples ventas en 1 transacción)',
-    example: '550e8400-e29b-41d4-a716-446655440010',
-    required: false,
-  })
   @IsOptional()
   @IsUUID()
   transaccion_id?: string;
 
-  @ApiProperty({
-    description: 'Items del ticket',
-    type: [TicketItemDto],
-    minItems: 1,
-  })
   @IsArray()
-  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => TicketItemDto)
   items: TicketItemDto[];
 
-  @ApiProperty({
-    description: 'Medios de pago (soporta múltiples para split tickets)',
-    type: [MedioPagoDto],
-    minItems: 1,
-  })
   @IsArray()
-  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => MedioPagoDto)
   medios_pago: MedioPagoDto[];
 
-  @ApiProperty({
-    description: 'Observaciones adicionales',
-    example: 'Cliente frecuente',
-    required: false,
-  })
   @IsOptional()
   @IsString()
   observaciones?: string;
+}
+
+export class AnularVentaDto {
+  @IsString()
+  @MinLength(10)
+  motivo_anulacion: string;
+}
+
+export class FilterVentasDto {
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Type(() => Number)
+  page?: number = 1;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  @Type(() => Number)
+  limit?: number = 20;
+
+  @IsOptional()
+  @IsUUID()
+  caja_id?: string;
+
+  @IsOptional()
+  fecha_desde?: string;
+
+  @IsOptional()
+  fecha_hasta?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  incluir_anuladas?: boolean = false;
 }

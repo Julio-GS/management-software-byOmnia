@@ -4,6 +4,9 @@ import { DevolucionesController } from './devoluciones.controller';
 import { DevolucionesService } from './devoluciones.service';
 import { DevolucionesRepository } from './repositories/devoluciones.repository';
 import { PrismaModule } from '../database/prisma.module';
+import { DevolucionValidator } from './validators/devolucion.validator';
+import { RefundCalculatorService } from './services/refund-calculator.service';
+import { ProcesarDevolucionHandler } from './handlers/procesar-devolucion.handler';
 
 /**
  * DevolucionesModule - Module for product returns/refunds
@@ -24,7 +27,13 @@ import { PrismaModule } from '../database/prisma.module';
 @Module({
   imports: [PrismaModule, CqrsModule],
   controllers: [DevolucionesController],
-  providers: [DevolucionesService, DevolucionesRepository],
+  providers: [
+    DevolucionesService,
+    DevolucionesRepository,
+    DevolucionValidator,
+    RefundCalculatorService,
+    ProcesarDevolucionHandler,
+  ],
   exports: [DevolucionesService, DevolucionesRepository],
 })
 export class DevolucionesModule {}

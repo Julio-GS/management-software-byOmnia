@@ -8,6 +8,7 @@ import { PricingService } from '../pricing/pricing.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../auth/enums/user-role.enum';
 
 @ApiTags('Categories')
 @ApiBearerAuth()
@@ -20,35 +21,35 @@ export class CategoriesController {
   ) {}
 
   @Post()
-  @Roles('manager', 'admin')
+  @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Create a new category' })
   create(@Body() createCategoryDto: CreateCategoryDto) {
     return this.categoriesService.create(createCategoryDto);
   }
 
   @Get()
-  @Roles('cashier', 'manager', 'admin')
+  @Roles(UserRole.CAJERO, UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get all categories' })
   findAll() {
     return this.categoriesService.findAll();
   }
 
   @Get(':id')
-  @Roles('cashier', 'manager', 'admin')
+  @Roles(UserRole.CAJERO, UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get category by ID' })
   findOne(@Param('id') id: string) {
     return this.categoriesService.findOne(id);
   }
 
   @Patch(':id')
-  @Roles('manager', 'admin')
+  @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Update category' })
   update(@Param('id') id: string, @Body() updateCategoryDto: UpdateCategoryDto) {
     return this.categoriesService.update(id, updateCategoryDto);
   }
 
   @Put(':id/markup')
-  @Roles('manager', 'admin')
+  @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
     summary: 'Update category markup',
@@ -87,7 +88,7 @@ export class CategoriesController {
   }
 
   @Delete(':id')
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete category' })
   remove(@Param('id') id: string) {

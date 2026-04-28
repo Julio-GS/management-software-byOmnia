@@ -6,6 +6,8 @@ import { ReportsRepository } from './repositories/reports.repository';
 import { DashboardCacheInvalidationHandler } from './handlers/dashboard-cache-invalidation.handler';
 import { DashboardMetricsRefreshHandler } from './handlers/dashboard-metrics-refresh.handler';
 import { PrismaModule } from '../database/prisma.module';
+import { PdfExportService } from './services/pdf-export.service';
+import { ExcelExportService } from './services/excel-export.service';
 
 @Module({
   imports: [CqrsModule, PrismaModule],
@@ -15,7 +17,9 @@ import { PrismaModule } from '../database/prisma.module';
     ReportsRepository,
     DashboardCacheInvalidationHandler,
     DashboardMetricsRefreshHandler,
+    PdfExportService,
+    ExcelExportService,
   ],
-  exports: [ReportsService],
+  exports: [ReportsService, PdfExportService, ExcelExportService],
 })
 export class ReportsModule {}

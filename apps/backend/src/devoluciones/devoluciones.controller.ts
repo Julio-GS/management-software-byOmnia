@@ -1,10 +1,13 @@
 import { Controller, Post, Get, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { CommandBus } from '@nestjs/cqrs';
 import { DevolucionesService } from './devoluciones.service';
-import { CreateDevolucionDto, FilterDevolucionesDto } from './dto';
+import { CreateDevolucionDto, FilterDevolucionesDto, ProcesarDevolucionDto } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { ProcesarDevolucionCommand } from './commands/procesar-devolucion.command';
+import { UserRole } from '../auth/enums/user-role.enum';
 
 /**
  * DevolucionesController - API endpoints for product returns/refunds
@@ -15,7 +18,10 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 @Controller('devoluciones')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class DevolucionesController {
-  constructor(private readonly devolucionesService: DevolucionesService) {}
+  constructor(
+    private readonly devolucionesService: DevolucionesService,
+    private readonly commandBus: CommandBus,
+  ) {}
 
   /**
    * POST /devoluciones
@@ -32,12 +38,35 @@ export class DevolucionesController {
    * - Emits DevolucionCreatedEvent
    */
   @Post()
-  @Roles('cajero', 'encargado', 'admin')
+  @Roles(UserRole.CAJERO, UserRole.ENCARGADO, UserRole.ADMIN)
   create(
     @Body() createDevolucionDto: CreateDevolucionDto,
     @CurrentUser() user: any,
   ) {
     return this.devolucionesService.createDevolucion(createDevolucionDto, user.id);
+  }
+
+  /**
+   * POST /devoluciones/procesar
+   * Process a devolucion using CQRS CommandBus
+   * 
+   * Roles: cajero, encargado, admin
+   * 
+   * This endpoint uses the command handler directly for better isolation
+   * and transaction control.
+   */
+  @Post('procesar')
+  @Roles(UserRole.CAJERO, UserRole.ENCARGADO, UserRole.ADMIN)
+  async procesarDevolucion(
+    @Body() dto: ProcesarDevolucionDto,
+  ) {
+    const command = new ProcesarDevolucionCommand(
+      dto.ventaId,
+      dto.productoId,
+      dto.cantidadDevuelta,
+      dto.motivoDevolucion,
+    );
+    return await this.commandBus.execute(command);
   }
 
   /**
@@ -56,7 +85,7 @@ export class DevolucionesController {
    * Roles: cajero, encargado, admin
    */
   @Get()
-  @Roles('cajero', 'encargado', 'admin')
+  @Roles(UserRole.CAJERO, UserRole.ENCARGADO, UserRole.ADMIN)
   findAll(@Query() query: FilterDevolucionesDto) {
     return this.devolucionesService.findAll(query);
   }
@@ -68,7 +97,7 @@ export class DevolucionesController {
    * Roles: cajero, encargado, admin
    */
   @Get(':id')
-  @Roles('cajero', 'encargado', 'admin')
+  @Roles(UserRole.CAJERO, UserRole.ENCARGADO, UserRole.ADMIN)
   findOne(@Param('id') id: string) {
     return this.devolucionesService.findOne(id);
   }
@@ -80,7 +109,7 @@ export class DevolucionesController {
    * Roles: cajero, encargado, admin
    */
   @Get('venta/:id')
-  @Roles('cajero', 'encargado', 'admin')
+  @Roles(UserRole.CAJERO, UserRole.ENCARGADO, UserRole.ADMIN)
   findByVenta(@Param('id') id: string) {
     return this.devolucionesService.findByVenta(id);
   }

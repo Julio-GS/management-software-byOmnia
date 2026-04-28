@@ -27,6 +27,7 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../auth/enums/user-role.enum';
 
 @ApiTags('Pricing')
 @ApiBearerAuth()
@@ -41,7 +42,7 @@ export class PricingController {
    * GET /api/v1/pricing/historia - List all price history
    */
   @Get('historia')
-  @Roles('manager', 'admin')
+  @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'List all price history' })
   @ApiResponse({ status: 200, description: 'Price history list' })
   async getAllPriceHistory(
@@ -65,7 +66,7 @@ export class PricingController {
    * GET /api/v1/pricing/historia/producto/:id - Get price history for a product
    */
   @Get('historia/producto/:id')
-  @Roles('manager', 'admin')
+  @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get price history for a product' })
   @ApiResponse({ status: 200, description: 'Product price history' })
   async getProductPriceHistory(
@@ -79,7 +80,7 @@ export class PricingController {
    * PATCH /api/v1/pricing/producto/:id - Update price/cost for a product
    */
   @Patch('producto/:id')
-  @Roles('manager', 'admin')
+  @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Update price/cost for a product' })
   @ApiResponse({ status: 200, description: 'Price updated' })
   async updateProductPrice(
@@ -94,7 +95,7 @@ export class PricingController {
    * PATCH /api/v1/pricing/bulk - Bulk update prices
    */
   @Patch('bulk')
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Bulk update prices' })
   @ApiResponse({ status: 200, description: 'Prices updated' })
@@ -108,7 +109,7 @@ export class PricingController {
    * POST /api/v1/pricing/calculate - Calculate price from cost+markup+IVA
    */
   @Post('calculate')
-  @Roles('cashier', 'manager', 'admin')
+  @Roles(UserRole.CAJERO, UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Calculate price from cost+markup+IVA' })
   @ApiResponse({ status: 200, description: 'Price calculated' })
   async calculatePriceWithIva(
@@ -122,7 +123,7 @@ export class PricingController {
    * GET /api/v1/pricing/rubro/:id/markup - Get default markup by rubro
    */
   @Get('rubro/:id/markup')
-  @Roles('manager', 'admin')
+  @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get default markup for rubro' })
   @ApiResponse({ status: 200, description: 'Markup retrieved' })
   async getRubroMarkup(
@@ -136,7 +137,7 @@ export class PricingController {
    * POST /api/v1/pricing/rubro/:id/apply-markup - Apply markup to all products in rubro
    */
   @Post('rubro/:id/apply-markup')
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Apply markup to all products in rubro' })
   @ApiResponse({ status: 200, description: 'Markup applied' })
@@ -152,7 +153,7 @@ export class PricingController {
   }
 
   @Post('calculate')
-  @Roles('cashier', 'manager', 'admin')
+  @Roles(UserRole.CAJERO, UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ 
     summary: 'Calculate price with markup hierarchy',
     description: 'Calculates product price based on cost and markup hierarchy (product > category > global)',
@@ -174,7 +175,7 @@ export class PricingController {
   }
 
   @Get('markup/:productId')
-  @Roles('manager', 'admin')
+  @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   @ApiOperation({ 
     summary: 'Get applicable markup for product',
     description: 'Returns the markup percentage and source (product/category/global) for a specific product',
@@ -198,7 +199,7 @@ export class PricingController {
   }
 
   @Put('global-markup')
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
     summary: 'Update global markup',
@@ -227,7 +228,7 @@ export class PricingController {
   }
 
   @Post('recalculate/category/:id')
-  @Roles('manager', 'admin')
+  @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
     summary: 'Recalculate prices for category',
@@ -256,7 +257,7 @@ export class PricingController {
   }
 
   @Post('recalculate/global')
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
     summary: 'Recalculate all prices',
@@ -282,7 +283,7 @@ export class PricingController {
   }
 
   @Post('recalculate/product/:id')
-  @Roles('manager', 'admin')
+  @Roles(UserRole.ENCARGADO, UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
     summary: 'Recalculate single product price',
