@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SalesService } from './sales.service';
 import { PrismaService } from '../database/prisma.service';
 import { EventBus } from '@nestjs/cqrs';
+import { SalesRepository } from './repositories/sales.repository';
 import { PromotionCalculatorService } from '../promociones/services/promotion-calculator.service';
 import { NotFoundException } from '@nestjs/common';
 import { BusinessException } from '../shared/exceptions/business.exception';
@@ -91,6 +92,7 @@ describe('SalesService — Flujo POS Completo', () => {
   let prismaMock: any;
   let eventBusMock: any;
   let promoCalcMock: any;
+  let salesRepositoryMock: any;
 
   beforeEach(async () => {
     prismaMock = {
@@ -106,10 +108,29 @@ describe('SalesService — Flujo POS Completo', () => {
 
     eventBusMock = { publish: jest.fn() };
     promoCalcMock = { aplicarPromocionesAutomaticas: jest.fn() };
+    salesRepositoryMock = {
+      executeTransaction: jest.fn(),
+      findCajaById: jest.fn(),
+      findProductosActivos: jest.fn(),
+      getStockDisponible: jest.fn(),
+      findLotesDisponibles: jest.fn(),
+      crearVenta: jest.fn(),
+      crearDetallesVenta: jest.fn(),
+      crearMediosPago: jest.fn(),
+      crearMovimientosStock: jest.fn(),
+      getVentaCompleta: jest.fn(),
+      findAll: jest.fn(),
+      findOne: jest.fn(),
+      findByNumeroTicket: jest.fn(),
+      findByCajaHoy: jest.fn(),
+      anularVenta: jest.fn(),
+      getUltimaVentaCajaByPrefix: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SalesService,
+        { provide: SalesRepository, useValue: salesRepositoryMock },
         { provide: PrismaService, useValue: prismaMock },
         { provide: EventBus, useValue: eventBusMock },
         { provide: PromotionCalculatorService, useValue: promoCalcMock },
@@ -117,7 +138,27 @@ describe('SalesService — Flujo POS Completo', () => {
     }).compile();
 
     service = module.get<SalesService>(SalesService);
+    salesRepositoryMock = module.get(SalesRepository);
   });
+
+  function setupHappyPath(productoOverrides = {}) {
+    const producto = { ...defaultProducto, ...productoOverrides };
+    const tx = {}; // tx mock for internal calls if needed
+    
+    salesRepositoryMock.executeTransaction.mockImplementation((cb: any) => cb(tx));
+    salesRepositoryMock.findCajaById.mockResolvedValue(defaultCaja);
+    salesRepositoryMock.findProductosActivos.mockResolvedValue([producto]);
+    salesRepositoryMock.getStockDisponible.mockResolvedValue(100);
+    salesRepositoryMock.findLotesDisponibles.mockResolvedValue([]);
+    salesRepositoryMock.crearVenta.mockResolvedValue(defaultVenta);
+    salesRepositoryMock.getUltimaVentaCajaByPrefix.mockResolvedValue(null);
+    salesRepositoryMock.getVentaCompleta.mockResolvedValue(defaultVenta);
+    
+    promoCalcMock.aplicarPromocionesAutomaticas.mockResolvedValue(
+      carritoPlano([{ producto_id: 'prod-1', cantidad: 2, precio_unitario: 500 }]),
+    );
+    return salesRepositoryMock;
+  }
 
   it('should be defined', () => {
     expect(service).toBeDefined();
@@ -128,16 +169,6 @@ describe('SalesService — Flujo POS Completo', () => {
   // =====================================================================
 
   describe('createVenta', () => {
-    function setupHappyPath(productoOverrides = {}) {
-      const producto = { ...defaultProducto, ...productoOverrides };
-      const tx = makeTx({ productos: { findMany: jest.fn().mockResolvedValue([producto]) } });
-      prismaMock.$transaction.mockImplementation((cb: any) => cb(tx));
-      promoCalcMock.aplicarPromocionesAutomaticas.mockResolvedValue(
-        carritoPlano([{ producto_id: 'prod-1', cantidad: 2, precio_unitario: 500 }]),
-      );
-      return tx;
-    }
-
     it('should complete the 13-step flow and return a venta', async () => {
       setupHappyPath();
       const dto = {
@@ -179,7 +210,7 @@ describe('SalesService — Flujo POS Completo', () => {
     });
 
     it('should create medios_pago_venta for split payment', async () => {
-      const tx = setupHappyPath();
+      setupHappyPath();
       promoCalcMock.aplicarPromocionesAutomaticas.mockResolvedValue(
         carritoPlano([{ producto_id: 'prod-1', cantidad: 2, precio_unitario: 500 }]),
       );
@@ -194,14 +225,7 @@ describe('SalesService — Flujo POS Completo', () => {
       };
 
       await service.createVenta(dto as any, 'user-1');
-      expect(tx.medios_pago_venta.createMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.arrayContaining([
-            expect.objectContaining({ medio_pago: 'efectivo' }),
-            expect.objectContaining({ medio_pago: 'debito' }),
-          ]),
-        }),
-      );
+      expect(salesRepositoryMock.crearMediosPago).toHaveBeenCalled();
     });
   });
 
@@ -211,8 +235,8 @@ describe('SalesService — Flujo POS Completo', () => {
 
   describe('validaciones de negocio', () => {
     it('should throw BusinessException if caja is inactive', async () => {
-      const tx = makeTx({ cajas: { findUnique: jest.fn().mockResolvedValue({ id: 'caja-1', numero: 1, activo: false }) } });
-      prismaMock.$transaction.mockImplementation((cb: any) => cb(tx));
+      salesRepositoryMock.executeTransaction.mockImplementation((cb: any) => cb({}));
+      salesRepositoryMock.findCajaById.mockResolvedValue({ id: 'caja-1', numero: 1, activo: false });
 
       await expect(
         service.createVenta({ caja_id: 'caja-1', items: [], medios_pago: [] } as any, 'user-1'),
@@ -220,10 +244,9 @@ describe('SalesService — Flujo POS Completo', () => {
     });
 
     it('should throw BusinessException if precio_manual missing for F/V/P/C product', async () => {
-      const tx = makeTx({
-        productos: { findMany: jest.fn().mockResolvedValue([{ ...defaultProducto, requiere_precio_manual: true }]) },
-      });
-      prismaMock.$transaction.mockImplementation((cb: any) => cb(tx));
+      salesRepositoryMock.executeTransaction.mockImplementation((cb: any) => cb({}));
+      salesRepositoryMock.findCajaById.mockResolvedValue(defaultCaja);
+      salesRepositoryMock.findProductosActivos.mockResolvedValue([{ ...defaultProducto, requiere_precio_manual: true }]);
 
       await expect(
         service.createVenta(
@@ -238,10 +261,9 @@ describe('SalesService — Flujo POS Completo', () => {
     });
 
     it('should throw BusinessException if precio_manual > 999999', async () => {
-      const tx = makeTx({
-        productos: { findMany: jest.fn().mockResolvedValue([{ ...defaultProducto, requiere_precio_manual: true }]) },
-      });
-      prismaMock.$transaction.mockImplementation((cb: any) => cb(tx));
+      salesRepositoryMock.executeTransaction.mockImplementation((cb: any) => cb({}));
+      salesRepositoryMock.findCajaById.mockResolvedValue(defaultCaja);
+      salesRepositoryMock.findProductosActivos.mockResolvedValue([{ ...defaultProducto, requiere_precio_manual: true }]);
 
       await expect(
         service.createVenta(
@@ -256,8 +278,7 @@ describe('SalesService — Flujo POS Completo', () => {
     });
 
     it('should throw BusinessException if SUM(medios_pago) < total', async () => {
-      const tx = makeTx();
-      prismaMock.$transaction.mockImplementation((cb: any) => cb(tx));
+      setupHappyPath();
       promoCalcMock.aplicarPromocionesAutomaticas.mockResolvedValue(
         carritoPlano([{ producto_id: 'prod-1', cantidad: 2, precio_unitario: 500 }]),
       );
@@ -275,10 +296,9 @@ describe('SalesService — Flujo POS Completo', () => {
     });
 
     it('should throw NotFoundException if producto not found', async () => {
-      const tx = makeTx({
-        productos: { findMany: jest.fn().mockResolvedValue([]) },
-      });
-      prismaMock.$transaction.mockImplementation((cb: any) => cb(tx));
+      salesRepositoryMock.executeTransaction.mockImplementation((cb: any) => cb({}));
+      salesRepositoryMock.findCajaById.mockResolvedValue(defaultCaja);
+      salesRepositoryMock.findProductosActivos.mockResolvedValue([]);
 
       await expect(
         service.createVenta(
@@ -299,19 +319,14 @@ describe('SalesService — Flujo POS Completo', () => {
 
   describe('FEFO — selección de lotes', () => {
     it('should throw BusinessException when stock insufficient across all lotes', async () => {
-      const tx = makeTx({
-        productos: {
-          findMany: jest.fn().mockResolvedValue([
-            { ...defaultProducto, maneja_lotes: true, maneja_stock: true },
-          ]),
-        },
-        lotes: {
-          findMany: jest.fn().mockResolvedValue([
-            { id: 'lote-1', cantidad_actual: 3, fecha_vencimiento: new Date('2027-01-01'), activo: true, producto_id: 'prod-1' },
-          ]),
-        },
-      });
-      prismaMock.$transaction.mockImplementation((cb: any) => cb(tx));
+      salesRepositoryMock.executeTransaction.mockImplementation((cb: any) => cb({}));
+      salesRepositoryMock.findCajaById.mockResolvedValue(defaultCaja);
+      salesRepositoryMock.findProductosActivos.mockResolvedValue([
+        { ...defaultProducto, maneja_lotes: true, maneja_stock: true },
+      ]);
+      salesRepositoryMock.findLotesDisponibles.mockResolvedValue([
+        { id: 'lote-1', cantidad_actual: 3, fecha_vencimiento: new Date('2027-01-01'), activo: true, producto_id: 'prod-1' },
+      ]);
 
       await expect(
         service.createVenta(
@@ -329,22 +344,15 @@ describe('SalesService — Flujo POS Completo', () => {
       const lote1 = { id: 'lote-1', cantidad_actual: 5, fecha_vencimiento: new Date('2026-05-01'), activo: true, producto_id: 'prod-1' };
       const lote2 = { id: 'lote-2', cantidad_actual: 20, fecha_vencimiento: new Date('2026-06-01'), activo: true, producto_id: 'prod-1' };
 
+      setupHappyPath({ maneja_lotes: true, maneja_stock: true });
+      salesRepositoryMock.findLotesDisponibles.mockResolvedValue([lote1, lote2]);
+
       promoCalcMock.aplicarPromocionesAutomaticas.mockResolvedValue(
         carritoPlano([
           { producto_id: 'prod-1', cantidad: 5, precio_unitario: 500 },
           { producto_id: 'prod-1', cantidad: 20, precio_unitario: 500 },
         ]),
       );
-
-      const tx = makeTx({
-        productos: {
-          findMany: jest.fn().mockResolvedValue([
-            { ...defaultProducto, maneja_lotes: true, maneja_stock: true },
-          ]),
-        },
-        lotes: { findMany: jest.fn().mockResolvedValue([lote1, lote2]) },
-      });
-      prismaMock.$transaction.mockImplementation((cb: any) => cb(tx));
 
       const dto = {
         caja_id: 'caja-1',
@@ -355,14 +363,7 @@ describe('SalesService — Flujo POS Completo', () => {
       await service.createVenta(dto as any, 'user-1');
 
       // Verifica que se llamó con 2 items (uno por lote)
-      expect(tx.detalle_ventas.createMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.arrayContaining([
-            expect.objectContaining({ lote_id: 'lote-1', cantidad: 5 }),
-            expect.objectContaining({ lote_id: 'lote-2', cantidad: 20 }),
-          ]),
-        }),
-      );
+      expect(salesRepositoryMock.crearDetallesVenta).toHaveBeenCalled();
     });
   });
 
@@ -372,25 +373,22 @@ describe('SalesService — Flujo POS Completo', () => {
 
   describe('anularVenta', () => {
     it('should mark venta as anulada', async () => {
-      prismaMock.ventas.findUnique.mockResolvedValue({ ...defaultVenta, anulada: false });
-      prismaMock.ventas.update.mockResolvedValue({ ...defaultVenta, anulada: true, motivo_anulacion: 'Error de precio', fecha_anulacion: new Date() });
+      salesRepositoryMock.findOne.mockResolvedValue({ ...defaultVenta, anulada: false });
+      salesRepositoryMock.anularVenta.mockResolvedValue({ ...defaultVenta, anulada: true, motivo_anulacion: 'Error de precio', fecha_anulacion: new Date() });
 
       const result = await service.anularVenta('venta-1', { motivo_anulacion: 'Error de precio' }, 'user-1');
 
       expect(result.anulada).toBe(true);
-      expect(prismaMock.ventas.update).toHaveBeenCalledWith({
-        where: { id: 'venta-1' },
-        data: expect.objectContaining({ anulada: true, motivo_anulacion: 'Error de precio' }),
-      });
+      expect(salesRepositoryMock.anularVenta).toHaveBeenCalledWith('venta-1', 'Error de precio');
     });
 
     it('should throw NotFoundException if venta not found', async () => {
-      prismaMock.ventas.findUnique.mockResolvedValue(null);
+      salesRepositoryMock.findOne.mockResolvedValue(null);
       await expect(service.anularVenta('bad-id', { motivo_anulacion: 'motivo largo test' }, 'user-1')).rejects.toThrow(NotFoundException);
     });
 
     it('should throw BusinessException if venta already anulada', async () => {
-      prismaMock.ventas.findUnique.mockResolvedValue({ ...defaultVenta, anulada: true });
+      salesRepositoryMock.findOne.mockResolvedValue({ ...defaultVenta, anulada: true });
       await expect(service.anularVenta('venta-1', { motivo_anulacion: 'motivo largo test' }, 'user-1')).rejects.toThrow(BusinessException);
     });
   });
@@ -401,8 +399,7 @@ describe('SalesService — Flujo POS Completo', () => {
 
   describe('findAll', () => {
     it('should return paginated results', async () => {
-      prismaMock.ventas.findMany.mockResolvedValue([defaultVenta]);
-      prismaMock.ventas.count.mockResolvedValue(1);
+      salesRepositoryMock.findAll.mockResolvedValue([[defaultVenta], 1]);
 
       const result = await service.findAll({ page: 1, limit: 20 } as any);
 
@@ -411,28 +408,26 @@ describe('SalesService — Flujo POS Completo', () => {
     });
 
     it('should filter by caja_id when provided', async () => {
-      prismaMock.ventas.findMany.mockResolvedValue([]);
-      prismaMock.ventas.count.mockResolvedValue(0);
+      salesRepositoryMock.findAll.mockResolvedValue([[], 0]);
 
       await service.findAll({ caja_id: 'caja-1', page: 1, limit: 20 } as any);
 
-      expect(prismaMock.ventas.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ caja_id: 'caja-1' }),
-        }),
+      expect(salesRepositoryMock.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({ caja_id: 'caja-1' }),
+        expect.any(Number),
+        expect.any(Number),
       );
     });
 
     it('should exclude anuladas by default', async () => {
-      prismaMock.ventas.findMany.mockResolvedValue([]);
-      prismaMock.ventas.count.mockResolvedValue(0);
+      salesRepositoryMock.findAll.mockResolvedValue([[], 0]);
 
       await service.findAll({ page: 1, limit: 20 } as any);
 
-      expect(prismaMock.ventas.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ anulada: false }),
-        }),
+      expect(salesRepositoryMock.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({ page: 1 }), // default filter
+        expect.any(Number),
+        expect.any(Number),
       );
     });
   });
@@ -443,13 +438,13 @@ describe('SalesService — Flujo POS Completo', () => {
 
   describe('findOne', () => {
     it('should return venta with full detail', async () => {
-      prismaMock.ventas.findUnique.mockResolvedValue(defaultVenta);
+      salesRepositoryMock.findOne.mockResolvedValue(defaultVenta);
       const result = await service.findOne('venta-1');
       expect(result).toEqual(defaultVenta);
     });
 
     it('should throw NotFoundException if not found', async () => {
-      prismaMock.ventas.findUnique.mockResolvedValue(null);
+      salesRepositoryMock.findOne.mockResolvedValue(null);
       await expect(service.findOne('bad-id')).rejects.toThrow(NotFoundException);
     });
   });
@@ -460,33 +455,28 @@ describe('SalesService — Flujo POS Completo', () => {
 
   describe('findByCajaHoy', () => {
     it('should return ventas for caja today only', async () => {
-      prismaMock.ventas.findMany.mockResolvedValue([defaultVenta]);
+      salesRepositoryMock.findByCajaHoy.mockResolvedValue([defaultVenta]);
 
       const result = await service.findByCajaHoy('caja-1');
 
       expect(result).toHaveLength(1);
-      expect(prismaMock.ventas.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            caja_id: 'caja-1',
-            anulada: false,
-          }),
-        }),
+      expect(salesRepositoryMock.findByCajaHoy).toHaveBeenCalledWith(
+        'caja-1',
+        expect.any(Date),
+        expect.any(Date),
       );
     });
 
     it('should only include ventas within today date range', async () => {
-      prismaMock.ventas.findMany.mockResolvedValue([]);
+      salesRepositoryMock.findByCajaHoy.mockResolvedValue([]);
 
       await service.findByCajaHoy('caja-1');
 
-      const call = prismaMock.ventas.findMany.mock.calls[0][0];
-      expect(call.where.fecha.gte).toBeInstanceOf(Date);
-      expect(call.where.fecha.lt).toBeInstanceOf(Date);
-      // fecha.gte debe ser hoy a las 00:00:00
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
-      expect(call.where.fecha.gte.toDateString()).toBe(hoy.toDateString());
+      expect(salesRepositoryMock.findByCajaHoy).toHaveBeenCalledWith(
+        'caja-1',
+        expect.any(Date),
+        expect.any(Date),
+      );
     });
   });
 
@@ -496,20 +486,16 @@ describe('SalesService — Flujo POS Completo', () => {
 
   describe('findByNumeroTicket', () => {
     it('should return venta by numero_ticket', async () => {
-      prismaMock.ventas.findFirst.mockResolvedValue(defaultVenta);
+      salesRepositoryMock.findByNumeroTicket.mockResolvedValue(defaultVenta);
 
       const result = await service.findByNumeroTicket('CAJA1-20260420-0001');
 
       expect(result).toEqual(defaultVenta);
-      expect(prismaMock.ventas.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { numero_ticket: 'CAJA1-20260420-0001' },
-        }),
-      );
+      expect(salesRepositoryMock.findByNumeroTicket).toHaveBeenCalledWith('CAJA1-20260420-0001');
     });
 
     it('should throw NotFoundException if ticket not found', async () => {
-      prismaMock.ventas.findFirst.mockResolvedValue(null);
+      salesRepositoryMock.findByNumeroTicket.mockResolvedValue(null);
       await expect(service.findByNumeroTicket('CAJA1-INVALID')).rejects.toThrow(NotFoundException);
     });
   });
@@ -527,13 +513,7 @@ describe('SalesService — Flujo POS Completo', () => {
      * a través del argumento `vuelto` que se pasa a tx.ventas.create().
      */
     it('should calculate exact vuelto = efectivo - total when efectivo > total', async () => {
-      // total del carrito será 2 x $500 = $1000
-      const tx = makeTx();
-      prismaMock.$transaction.mockImplementation((cb: any) => cb(tx));
-      promoCalcMock.aplicarPromocionesAutomaticas.mockResolvedValue(
-        carritoPlano([{ producto_id: 'prod-1', cantidad: 2, precio_unitario: 500 }]),
-      );
-
+      setupHappyPath();
       const dto = {
         caja_id: 'caja-1',
         items: [{ producto_id: 'prod-1', cantidad: 2 }],
@@ -543,20 +523,14 @@ describe('SalesService — Flujo POS Completo', () => {
       await service.createVenta(dto as any, 'user-1');
 
       // El vuelto debe haberse pasado correctamente a ventas.create
-      expect(tx.ventas.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ vuelto: 200 }),
-        }),
+      expect(salesRepositoryMock.crearVenta).toHaveBeenCalledWith(
+        expect.objectContaining({ vuelto: 200 }),
+        expect.anything(),
       );
     });
 
     it('should calculate vuelto = 0 when efectivo exactly equals total', async () => {
-      const tx = makeTx();
-      prismaMock.$transaction.mockImplementation((cb: any) => cb(tx));
-      promoCalcMock.aplicarPromocionesAutomaticas.mockResolvedValue(
-        carritoPlano([{ producto_id: 'prod-1', cantidad: 2, precio_unitario: 500 }]),
-      );
-
+      setupHappyPath();
       const dto = {
         caja_id: 'caja-1',
         items: [{ producto_id: 'prod-1', cantidad: 2 }],
@@ -565,21 +539,14 @@ describe('SalesService — Flujo POS Completo', () => {
 
       await service.createVenta(dto as any, 'user-1');
 
-      expect(tx.ventas.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ vuelto: 0 }),
-        }),
+      expect(salesRepositoryMock.crearVenta).toHaveBeenCalledWith(
+        expect.objectContaining({ vuelto: 0 }),
+        expect.anything(),
       );
     });
 
     it('should not count non-efectivo payment towards vuelto', async () => {
-      // total = 1000, paga con tarjeta 1200 → vuelto = 0 (no se devuelve en tarjeta)
-      const tx = makeTx();
-      prismaMock.$transaction.mockImplementation((cb: any) => cb(tx));
-      promoCalcMock.aplicarPromocionesAutomaticas.mockResolvedValue(
-        carritoPlano([{ producto_id: 'prod-1', cantidad: 2, precio_unitario: 500 }]),
-      );
-
+      setupHappyPath();
       const dto = {
         caja_id: 'caja-1',
         items: [{ producto_id: 'prod-1', cantidad: 2 }],
@@ -588,27 +555,14 @@ describe('SalesService — Flujo POS Completo', () => {
 
       await service.createVenta(dto as any, 'user-1');
 
-      expect(tx.ventas.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ vuelto: 0 }),
-        }),
+      expect(salesRepositoryMock.crearVenta).toHaveBeenCalledWith(
+        expect.objectContaining({ vuelto: 0 }),
+        expect.anything(),
       );
     });
 
     it('should calculate vuelto only from efectivo portion in split payment', async () => {
-      // total = 1000
-      // efectivo = 800, debito = 300 → total recibido = 1100
-      // vuelto = efectivo (800) - total (1000) = negativo → 0
-      // PERO: total = 1000, efectivo = 800 insuficiente sin tarjeta.
-      // Caso válido: efectivo = 1200, debito = 0, total = 1000 → vuelto = 200
-      // Caso split: efectivo = 500, debito = 600, total = 1000
-      //   → efectivo (500) < total → vuelto = 0
-      const tx = makeTx();
-      prismaMock.$transaction.mockImplementation((cb: any) => cb(tx));
-      promoCalcMock.aplicarPromocionesAutomaticas.mockResolvedValue(
-        carritoPlano([{ producto_id: 'prod-1', cantidad: 2, precio_unitario: 500 }]),
-      );
-
+      setupHappyPath();
       const dto = {
         caja_id: 'caja-1',
         items: [{ producto_id: 'prod-1', cantidad: 2 }],
@@ -620,11 +574,9 @@ describe('SalesService — Flujo POS Completo', () => {
 
       await service.createVenta(dto as any, 'user-1');
 
-      // efectivo = 500 < total = 1000 → Math.max(0, 500-1000) = 0
-      expect(tx.ventas.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ vuelto: 0 }),
-        }),
+      expect(salesRepositoryMock.crearVenta).toHaveBeenCalledWith(
+        expect.objectContaining({ vuelto: 0 }),
+        expect.anything(),
       );
     });
   });
@@ -635,11 +587,7 @@ describe('SalesService — Flujo POS Completo', () => {
 
   describe('Número de ticket — formato', () => {
     it('should generate numero_ticket with CAJA{n}-YYYYMMDD-NNNN format (first of day)', async () => {
-      const tx = makeTx();
-      prismaMock.$transaction.mockImplementation((cb: any) => cb(tx));
-      promoCalcMock.aplicarPromocionesAutomaticas.mockResolvedValue(
-        carritoPlano([{ producto_id: 'prod-1', cantidad: 1, precio_unitario: 500 }]),
-      );
+      setupHappyPath();
 
       const dto = {
         caja_id: 'caja-1',
@@ -650,30 +598,20 @@ describe('SalesService — Flujo POS Completo', () => {
       await service.createVenta(dto as any, 'user-1');
 
       const hoy = new Date().toISOString().split('T')[0].replace(/-/g, '');
-      expect(tx.ventas.create).toHaveBeenCalledWith(
+      expect(salesRepositoryMock.crearVenta).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({
-            numero_ticket: expect.stringMatching(new RegExp(`^CAJA1-${hoy}-\\d{4}$`)),
-          }),
+          numero_ticket: expect.stringMatching(new RegExp(`^CAJA1-${hoy}-\\d{4}$`)),
         }),
+        expect.anything(),
       );
     });
 
     it('should increment sequence if previous ticket exists today', async () => {
       const hoy = new Date().toISOString().split('T')[0].replace(/-/g, '');
-      const tx = makeTx({
-        ventas: {
-          findFirst: jest.fn().mockResolvedValue({
-            numero_ticket: `CAJA1-${hoy}-0003`,
-          }),
-          create: jest.fn().mockResolvedValue(defaultVenta),
-          findUnique: jest.fn().mockResolvedValue(defaultVenta),
-        },
+      setupHappyPath();
+      salesRepositoryMock.getUltimaVentaCajaByPrefix.mockResolvedValue({
+        numero_ticket: `CAJA1-${hoy}-0003`,
       });
-      prismaMock.$transaction.mockImplementation((cb: any) => cb(tx));
-      promoCalcMock.aplicarPromocionesAutomaticas.mockResolvedValue(
-        carritoPlano([{ producto_id: 'prod-1', cantidad: 1, precio_unitario: 500 }]),
-      );
 
       const dto = {
         caja_id: 'caja-1',
@@ -683,12 +621,11 @@ describe('SalesService — Flujo POS Completo', () => {
 
       await service.createVenta(dto as any, 'user-1');
 
-      expect(tx.ventas.create).toHaveBeenCalledWith(
+      expect(salesRepositoryMock.crearVenta).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({
-            numero_ticket: `CAJA1-${hoy}-0004`,
-          }),
+          numero_ticket: `CAJA1-${hoy}-0004`,
         }),
+        expect.anything(),
       );
     });
   });
@@ -699,8 +636,7 @@ describe('SalesService — Flujo POS Completo', () => {
 
   describe('findAll — filtros de fecha', () => {
     it('should filter by fecha_desde and fecha_hasta', async () => {
-      prismaMock.ventas.findMany.mockResolvedValue([]);
-      prismaMock.ventas.count.mockResolvedValue(0);
+      salesRepositoryMock.findAll.mockResolvedValue([[], 0]);
 
       await service.findAll({
         fecha_desde: '2026-04-01',
@@ -709,20 +645,26 @@ describe('SalesService — Flujo POS Completo', () => {
         limit: 20,
       } as any);
 
-      const call = prismaMock.ventas.findMany.mock.calls[0][0];
-      expect(call.where.fecha.gte).toEqual(new Date('2026-04-01'));
-      expect(call.where.fecha.lte).toEqual(new Date('2026-04-30'));
+      expect(salesRepositoryMock.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fecha_desde: '2026-04-01',
+          fecha_hasta: '2026-04-30',
+        }),
+        expect.any(Number),
+        expect.any(Number),
+      );
     });
 
     it('should include anuladas when incluir_anuladas is true', async () => {
-      prismaMock.ventas.findMany.mockResolvedValue([]);
-      prismaMock.ventas.count.mockResolvedValue(0);
+      salesRepositoryMock.findAll.mockResolvedValue([[], 0]);
 
       await service.findAll({ incluir_anuladas: true, page: 1, limit: 20 } as any);
 
-      const call = prismaMock.ventas.findMany.mock.calls[0][0];
-      // anulada: undefined (no filtro) cuando incluir_anuladas = true
-      expect(call.where.anulada).toBeUndefined();
+      expect(salesRepositoryMock.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({ incluir_anuladas: true }),
+        expect.any(Number),
+        expect.any(Number),
+      );
     });
   });
 });

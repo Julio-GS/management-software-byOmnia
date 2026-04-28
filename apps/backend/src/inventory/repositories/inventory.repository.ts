@@ -144,7 +144,7 @@ export class InventoryRepository {
     const movimiento = await this.createMovimiento({
       producto_id: productoId,
       lote_id: loteId,
-      tipo_movimiento: 'ENTRADA',
+      tipo_movimiento: 'entrada',
       cantidad,
       referencia: params?.referencia,
       observaciones: params?.observaciones,
@@ -182,7 +182,7 @@ export class InventoryRepository {
       const movimiento = await this.createMovimiento({
         producto_id: productoId,
         lote_id: params.lote_id,
-        tipo_movimiento: 'AJUSTE',
+        tipo_movimiento: diferencia >= 0 ? 'ajuste_positivo' : 'ajuste_negativo',
         cantidad: diferencia,
         referencia: params?.referencia,
         observaciones: params?.observaciones,
@@ -197,7 +197,7 @@ export class InventoryRepository {
     // For products without lotes - create adjustment with reason
     const movimiento = await this.createMovimiento({
       producto_id: productoId,
-      tipo_movimiento: 'AJUSTE',
+      tipo_movimiento: newStock >= 0 ? 'ajuste_positivo' : 'ajuste_negativo',
       cantidad: newStock,
       referencia: params?.referencia,
       observaciones: params?.observaciones,
@@ -223,7 +223,7 @@ export class InventoryRepository {
     const movimiento = await this.createMovimiento({
       producto_id: productoId,
       lote_id: loteId,
-      tipo_movimiento: 'MERMA',
+      tipo_movimiento: 'merma',
       cantidad,
       referencia: params?.referencia,
       observaciones: params?.observaciones,

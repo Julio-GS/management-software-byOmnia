@@ -243,6 +243,7 @@ export class ProductosRepository {
         precio_venta: dto.precio_venta,
         stock_minimo: dto.stock_minimo,
         maneja_stock: dto.maneja_stock,
+        updated_at: new Date(),
         // activo has default=true in Prisma schema, no need to set explicitly
       },
       include: {
@@ -261,7 +262,7 @@ export class ProductosRepository {
   async softDelete(id: string): Promise<Producto> {
     const data = await this.prisma.productos.update({
       where: { id },
-      data: { activo: false },
+      data: { activo: false, updated_at: new Date() },
       include: {
         proveedores: true,
         rubros: true,

@@ -16,7 +16,7 @@ describe('SalesController', () => {
 
   beforeEach(async () => {
     const mockSalesService = {
-      createVenta: jest.fn().mockResolvedValue(mockVenta),
+      createVenta: jest.fn().mockResolvedValue({ venta: mockVenta, conflictos: [] }),
       findAll: jest.fn().mockResolvedValue({ data: [mockVenta], total: 1, page: 1, limit: 20 }),
       findOne: jest.fn().mockResolvedValue(mockVenta),
       findByNumeroTicket: jest.fn().mockResolvedValue(mockVenta),

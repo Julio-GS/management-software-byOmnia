@@ -49,7 +49,7 @@ describe('CreateDevolucionDto', () => {
     });
 
     it('should accept all valid tipo_devolucion values', async () => {
-      const tipos = ['efectivo', 'transferencia', 'nota_credito'];
+      const tipos = ['efectivo', 'nota_credito', 'cambio'];
       
       for (const tipo of tipos) {
         const dto = plainToInstance(CreateDevolucionDto, {
@@ -57,7 +57,7 @@ describe('CreateDevolucionDto', () => {
           producto_id: '123e4567-e89b-12d3-a456-426614174001',
           cantidad: 5,
           tipo_devolucion: tipo,
-          medio_devolucion: tipo,
+          medio_devolucion: 'efectivo',
           motivo: 'Producto defectuoso',
         });
 

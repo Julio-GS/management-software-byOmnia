@@ -2,10 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { RubrosController } from './rubros.controller';
 import { RubrosService } from './rubros.service';
+import { PricingService } from '../pricing/pricing.service';
 
 describe('RubrosController', () => {
   let controller: RubrosController;
   let service: jest.Mocked<RubrosService>;
+  let pricingService: jest.Mocked<PricingService>;
 
   const mockRubro: any = {
     id: '123e4567-e89b-12d3-a456-426614174000',
@@ -32,6 +34,10 @@ describe('RubrosController', () => {
       softDelete: jest.fn(),
     };
 
+    const mockPricingService = {
+      recalculatePricesForCategory: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [RubrosController],
       providers: [
@@ -39,11 +45,16 @@ describe('RubrosController', () => {
           provide: RubrosService,
           useValue: mockService,
         },
+        {
+          provide: PricingService,
+          useValue: mockPricingService,
+        },
       ],
     }).compile();
 
     controller = module.get<RubrosController>(RubrosController);
     service = module.get(RubrosService);
+    pricingService = module.get(PricingService);
   });
 
   describe('findAll', () => {

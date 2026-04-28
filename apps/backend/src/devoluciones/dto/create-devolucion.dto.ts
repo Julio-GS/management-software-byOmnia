@@ -19,7 +19,7 @@ export class CreateDevolucionDto {
   @Min(0.001)
   cantidad: number;
 
-  @IsIn(['efectivo', 'transferencia', 'nota_credito'])
+  @IsIn(['efectivo', 'nota_credito', 'cambio'])
   tipo_devolucion: string;
 
   @IsIn(['efectivo', 'transferencia', 'nota_credito'])

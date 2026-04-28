@@ -5,10 +5,12 @@ import { RubrosRepository } from './repositories/rubros.repository';
 import { RubroEntity } from './entities/rubro.entity';
 import { CreateRubroDto } from './dto/create-rubro.dto';
 import { UpdateRubroDto } from './dto/update-rubro.dto';
+import { EventBus } from '@nestjs/cqrs';
 
 describe('RubrosService', () => {
   let service: RubrosService;
   let repository: jest.Mocked<RubrosRepository>;
+  let eventBus: jest.Mocked<EventBus>;
 
   const mockRubro: any = {
     id: '123e4567-e89b-12d3-a456-426614174000',
@@ -35,6 +37,10 @@ describe('RubrosService', () => {
       softDelete: jest.fn(),
     };
 
+    const mockEventBus = {
+      publish: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RubrosService,
@@ -42,11 +48,16 @@ describe('RubrosService', () => {
           provide: RubrosRepository,
           useValue: mockRepository,
         },
+        {
+          provide: EventBus,
+          useValue: mockEventBus,
+        },
       ],
     }).compile();
 
     service = module.get<RubrosService>(RubrosService);
     repository = module.get(RubrosRepository);
+    eventBus = module.get(EventBus);
   });
 
   describe('findAll', () => {

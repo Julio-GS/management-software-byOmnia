@@ -17,7 +17,7 @@ import { ApiProperty } from '@nestjs/swagger';
 /**
  * Promotion types enum
  */
-export const TIPO_PROMOCION = ['descuento_porcentaje', 'descuento_monto', 'cantidad_por_cantidad', 'precio_especial'] as const;
+export const TIPO_PROMOCION = ['descuento_porcentaje', 'descuento_monto', '2x1', 'precio_especial'] as const;
 export type TipoPromocion = typeof TIPO_PROMOCION[number];
 
 /**
