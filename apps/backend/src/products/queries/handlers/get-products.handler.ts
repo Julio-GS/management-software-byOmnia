@@ -1,14 +1,14 @@
 import { IQueryHandler, QueryHandler } from '@nestjs/cqrs';
 import { GetProductsQuery } from '../get-products.query';
-import { ProductsService } from '../../products.service';
+import { ProductsEsService } from '../../products-es.service';
 
 @QueryHandler(GetProductsQuery)
 export class GetProductsHandler implements IQueryHandler<GetProductsQuery> {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(private readonly ProductsEsService: ProductsEsService) {}
 
   async execute(query: GetProductsQuery): Promise<any> {
-    // ProductsService.findAll only accepts filters (no pagination yet)
-    // TODO: Add pagination support to ProductsService in future phase
-    return this.productsService.findAll(query.filters);
+    // ProductsEsService.findAll only accepts filters (no pagination yet)
+    // TODO: Add pagination support to ProductsEsService in future phase
+    return this.ProductsEsService.findAll(query.filters);
   }
 }

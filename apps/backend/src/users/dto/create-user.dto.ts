@@ -12,9 +12,16 @@ import type { RegisterRequest } from "@omnia/shared-types";
 import { UserRole } from "@omnia/shared-types";
 
 export class CreateUserDto implements RegisterRequest {
+  @ApiProperty({ example: "johndoe" })
+  @IsString()
+  @MinLength(3, { message: "Username must be at least 3 characters long" })
+  @MaxLength(50)
+  username: string;
+
   @ApiProperty({ example: "john.doe@omnia.com" })
   @IsEmail({}, { message: "Invalid email format" })
-  email: string;
+  @IsOptional()
+  email?: string;
 
   @ApiProperty({ example: "SecurePassword123!" })
   @IsString()

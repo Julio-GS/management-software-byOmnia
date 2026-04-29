@@ -1,8 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { EventBus } from '@nestjs/cqrs';
 import { PriceCalculationResultDto } from './dto/price-calculation-result.dto';
 import { PricingRepository } from './repositories/pricing.repository';
+import { MarkupCalculatorService } from './services/markup-calculator.service';
 import { PricingRecalculatedEvent } from '../shared/events';
+import { UpdatePrecioDto, BulkUpdatePreciosDto, FilterPreciosHistoriaDto, ApplyMarkupToRubroDto } from './dto/pricing-crud.dto';
 
 @Injectable()
 export class PricingService {
@@ -10,6 +12,7 @@ export class PricingService {
 
   constructor(
     private readonly repository: PricingRepository,
+    private readonly markupCalculator: MarkupCalculatorService,
     private readonly eventBus: EventBus,
   ) {}
 
@@ -78,14 +81,14 @@ export class PricingService {
       }
 
       // If product has no markup but has a category, use that categoryId
-      if (!categoryId && productData?.categoryId) {
-        categoryId = productData.categoryId;
+      if (!categoryId && productData?.rubro_id) {
+        categoryId = productData.rubro_id;
       }
     }
 
     // 2. Try category-level markup
     if (categoryId) {
-      const categoryMarkup = await this.repository.getCategoryMarkup(categoryId);
+      const categoryMarkup = await this.repository.getRubroMarkup(categoryId);
 
       if (categoryMarkup) {
         return {
@@ -105,10 +108,11 @@ export class PricingService {
 
   /**
    * Update the global markup setting
+   * TODO: Implement when global settings table is added
    */
   async updateGlobalMarkup(percentage: number): Promise<void> {
-    await this.repository.updateGlobalMarkup(percentage);
-    this.logger.log(`Global markup updated to ${percentage}%`);
+    // await this.repository.updateGlobalMarkup(percentage);
+    this.logger.warn(`updateGlobalMarkup not implemented - would update to ${percentage}%`);
   }
 
   /**
@@ -119,7 +123,7 @@ export class PricingService {
    */
   async recalculatePricesForCategory(categoryId: string): Promise<number> {
     // Get all products in the category that don't have a product-specific markup
-    const products = await this.repository.getProductsInCategoryWithoutMarkup(categoryId);
+    const products = await this.repository.getProductosInRubro(categoryId);
 
     this.logger.log(
       `Recalculating prices for ${products.length} products in category ${categoryId}`,
@@ -129,18 +133,18 @@ export class PricingService {
     let updated = 0;
     for (const product of products) {
       const priceResult = await this.calculatePrice(
-        product.cost,
+        product.costo,
         product.id,
         categoryId,
       );
 
-      await this.repository.updateProductPrice(product.id, priceResult.suggestedPrice);
+      await this.repository.setProductPrice(product.id, priceResult.suggestedPrice);
 
       // Emit event for each product price update
       this.eventBus.publish(
         new PricingRecalculatedEvent(
           product.id,
-          product.cost,
+          product.costo,
           priceResult.markupPercentage,
           priceResult.suggestedPrice,
           new Date(),
@@ -164,7 +168,7 @@ export class PricingService {
    */
   async recalculatePricesGlobal(): Promise<number> {
     // Get all products that rely on global markup
-    const products = await this.repository.getProductsUsingGlobalMarkup();
+    const products = await this.repository.getProductosUsingGlobalMarkup();
 
     this.logger.log(
       `Recalculating prices for ${products.length} products using global markup`,
@@ -174,18 +178,18 @@ export class PricingService {
     let updated = 0;
     for (const product of products) {
       const priceResult = await this.calculatePrice(
-        product.cost,
+        product.costo,
         product.id,
-        product.categoryId || undefined,
+        product.rubro_id || undefined,
       );
 
-      await this.repository.updateProductPrice(product.id, priceResult.suggestedPrice);
+      await this.repository.setProductPrice(product.id, priceResult.suggestedPrice);
 
       // Emit event for each product price update
       this.eventBus.publish(
         new PricingRecalculatedEvent(
           product.id,
-          product.cost,
+          product.costo,
           priceResult.markupPercentage,
           priceResult.suggestedPrice,
           new Date(),
@@ -205,36 +209,128 @@ export class PricingService {
    * Useful when cost changes or markup is removed
    */
   async recalculatePriceForProduct(productId: string): Promise<void> {
-    const product = await this.repository.getProductForPriceCalculation(productId);
+    const product = await this.repository.getProductById(productId);
 
     if (!product) {
       throw new Error(`Product ${productId} not found`);
     }
 
-    if (product.deletedAt) {
-      this.logger.warn(`Skipping price recalculation for soft-deleted product ${productId}`);
+    if (!product.activo) {
+      this.logger.warn(`Skipping price recalculation for inactive product ${productId}`);
       return;
     }
 
     const priceResult = await this.calculatePrice(
-      product.cost,
+      product.costo,
       productId,
-      product.categoryId || undefined,
+      product.rubro_id || undefined,
     );
 
-    await this.repository.updateProductPrice(productId, priceResult.suggestedPrice);
+    await this.repository.setProductPrice(productId, priceResult.suggestedPrice);
 
     this.logger.log(`Updated price for product ${productId} to ${priceResult.suggestedPrice}`);
 
-    // Emit event for product price update
+// Emit event for product price update
     this.eventBus.publish(
       new PricingRecalculatedEvent(
         productId,
-        product.cost,
+        product.costo,
         priceResult.markupPercentage,
         priceResult.suggestedPrice,
         new Date(),
       ),
     );
+  }
+
+  // ========== NEW METHODS FOR PHASE 4 ==========
+
+  /**
+   * Update price/cost for a product with history tracking
+   */
+  async updatePrice(productId: string, data: UpdatePrecioDto): Promise<void> {
+    const producto = await this.repository.getProductById(productId);
+    if (!producto) {
+      throw new NotFoundException(`Producto ${productId} no encontrado`);
+    }
+    
+    if (!producto.activo) {
+      throw new BadRequestException('No se puede modificar precio de producto inactivo');
+    }
+
+    await this.repository.updatePrice(productId, data);
+    this.logger.log(`Price updated for product ${productId}`);
+  }
+
+  /**
+   * Bulk update prices
+   */
+  async bulkUpdatePrices(data: BulkUpdatePreciosDto): Promise<{ updated: number; failed: number }> {
+    const result = await this.repository.bulkUpdatePrices(data.updates);
+    this.logger.log(`Bulk update completed: ${result.updated} updated, ${result.failed} failed`);
+    return result;
+  }
+
+  /**
+   * Get price history for a product
+   */
+  async getPriceHistory(productId: string, limit = 20): Promise<Array<{
+    id: string;
+    producto_id: string;
+    precio_anterior: number | null;
+    precio_nuevo: number | null;
+    costo_anterior: number | null;
+    costo_nuevo: number | null;
+    motivo: string | null;
+    tipo_cambio: string | null;
+    fecha_cambio: Date;
+  }>> {
+    return this.repository.getPriceHistoryByProduct(productId, limit);
+  }
+
+  /**
+   * Get all price history with filters
+   */
+  async getAllPriceHistory(filters: FilterPreciosHistoriaDto): Promise<{
+    data: Array<{
+      id: string;
+      producto_id: string;
+      precio_anterior: number | null;
+      precio_nuevo: number | null;
+      motivo: string | null;
+      tipo_cambio: string | null;
+      fecha_cambio: Date;
+    }>;
+    total: number;
+  }> {
+    return this.repository.getAllPriceHistory({
+      producto_id: filters.producto_id,
+      fecha_desde: filters.fecha_desde,
+      fecha_hasta: filters.fecha_hasta,
+      limit: filters.limit,
+      offset: ((filters.page || 1) - 1) * (filters.limit || 20),
+    });
+  }
+
+  /**
+   * Calculate price from cost + markup + IVA
+   */
+  calculatePriceWithIva(costo: number, markup: number, iva: number): number {
+    return this.markupCalculator.calculatePrice(costo, markup, iva);
+  }
+
+  /**
+   * Get default markup for a rubro
+   */
+  async getDefaultMarkupByRubro(rubroId: string): Promise<number> {
+    return this.repository.getDefaultMarkupByRubro(rubroId);
+  }
+
+  /**
+   * Apply markup to all products in a rubro
+   */
+  async applyMarkupToRubro(rubroId: string, markup: number): Promise<number> {
+    const count = await this.repository.applyMarkupToRubro(rubroId, markup);
+    this.logger.log(`Applied ${markup}% markup to ${count} products in rubro ${rubroId}`);
+    return count;
   }
 }

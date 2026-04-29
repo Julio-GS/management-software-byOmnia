@@ -1,0 +1,42 @@
+meta {
+  name: Batch Push
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/sync/batch-push
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "caja_id": "{{cajaId}}",
+    "operations": [
+      {
+        "entity_type": "venta",
+        "operation_type": "CREATE",
+        "transaccion_id": "11111111-2222-3333-4444-555555555555",
+        "payload": {
+          "items": [
+            {
+              "producto_id": "{{productoId}}",
+              "cantidad": 1
+            }
+          ],
+          "medios_pago": [
+            {
+              "medio_pago": "efectivo",
+              "monto": 1000
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

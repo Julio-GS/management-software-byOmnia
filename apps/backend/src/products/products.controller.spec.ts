@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProductsController } from './products.controller';
-import { ProductsService } from './products.service';
+import { ProductsEsService } from './products-es.service';
 import { PricingService } from '../pricing/pricing.service';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { GetProductsQuery } from './queries/get-products.query';
@@ -13,7 +13,7 @@ describe('ProductsController (CQRS)', () => {
   let controller: ProductsController;
   let queryBus: QueryBus;
   let commandBus: CommandBus;
-  let productsService: ProductsService;
+  let productsService: ProductsEsService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -32,8 +32,9 @@ describe('ProductsController (CQRS)', () => {
           },
         },
         {
-          provide: ProductsService,
+          provide: ProductsEsService,
           useValue: {
+            create: jest.fn(),
             findOne: jest.fn(),
             update: jest.fn(),
             remove: jest.fn(),
@@ -55,7 +56,7 @@ describe('ProductsController (CQRS)', () => {
     controller = module.get<ProductsController>(ProductsController);
     queryBus = module.get<QueryBus>(QueryBus);
     commandBus = module.get<CommandBus>(CommandBus);
-    productsService = module.get<ProductsService>(ProductsService);
+    productsService = module.get<ProductsEsService>(ProductsEsService);
   });
 
   it('should be defined', () => {
@@ -103,71 +104,39 @@ describe('ProductsController (CQRS)', () => {
   });
 
   describe('create (POST /products)', () => {
-    it('should dispatch CreateProductCommand with all fields', async () => {
+    it('should call ProductsEsService.create with all fields (Spanish DTO)', async () => {
       const dto: CreateProductDto = {
-        name: 'Product 1',
-        description: 'Test product',
-        price: 100,
-        cost: 50,
-        sku: 'SKU-001',
-        barcode: '123456789',
-        stock: 10,
-        minStock: 5,
-        maxStock: 100,
-        categoryId: 'cat-1',
-        markup: 35,
-        taxRate: 21,
-        imageUrl: 'http://example.com/image.jpg',
-        isActive: true,
+        codigo: 'SKU-001',
+        codigo_barras: '123456789',
+        detalle: 'Producto de prueba',
+        costo: 50,
+        precio_venta: 100,
+        rubro_id: 'cat-1',
+        maneja_stock: true,
+        stock_minimo: 5,
       };
       const result = { id: '1', ...dto };
-      jest.spyOn(commandBus, 'execute').mockResolvedValue(result);
+      jest.spyOn(productsService, 'create').mockResolvedValue(result as any);
 
       const response = await controller.create(dto);
 
       expect(response).toBe(result);
-      expect(commandBus.execute).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: dto.name,
-          description: dto.description,
-          price: dto.price,
-          cost: dto.cost,
-          sku: dto.sku,
-          barcode: dto.barcode,
-          stock: dto.stock,
-          minStock: dto.minStock,
-          maxStock: dto.maxStock,
-          categoryId: dto.categoryId,
-          markup: dto.markup,
-          taxRate: dto.taxRate,
-          imageUrl: dto.imageUrl,
-          isActive: dto.isActive,
-        }),
-      );
-      expect(commandBus.execute).toHaveBeenCalledTimes(1);
+      expect(productsService.create).toHaveBeenCalledWith(dto);
+      expect(productsService.create).toHaveBeenCalledTimes(1);
     });
 
-    it('should dispatch CreateProductCommand with required fields only', async () => {
+    it('should call ProductsEsService.create with required fields only', async () => {
       const dto: CreateProductDto = {
-        name: 'Product 1',
-        price: 100,
-        cost: 50,
-        sku: 'SKU-001',
+        codigo: 'SKU-001',
+        detalle: 'Producto simple',
       };
       const result = { id: '1', ...dto };
-      jest.spyOn(commandBus, 'execute').mockResolvedValue(result);
+      jest.spyOn(productsService, 'create').mockResolvedValue(result as any);
 
       const response = await controller.create(dto);
 
       expect(response).toBe(result);
-      expect(commandBus.execute).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: dto.name,
-          price: dto.price,
-          cost: dto.cost,
-          sku: dto.sku,
-        }),
-      );
+      expect(productsService.create).toHaveBeenCalledWith(dto);
     });
   });
 
@@ -193,7 +162,7 @@ describe('ProductsController (CQRS)', () => {
   });
 
   describe('findOne (GET /products/:id)', () => {
-    it('should call productsService.findOne (NO CQRS yet)', async () => {
+    it('should call ProductsEsService.findOne (NO CQRS yet)', async () => {
       const id = 'product-123';
       const result = { id, name: 'Product 1' };
       jest.spyOn(productsService, 'findOne').mockResolvedValue(result as any);
@@ -207,9 +176,9 @@ describe('ProductsController (CQRS)', () => {
   });
 
   describe('update (PATCH /products/:id)', () => {
-    it('should call productsService.update (NO CQRS yet)', async () => {
+    it('should call ProductsEsService.update (NO CQRS yet)', async () => {
       const id = 'product-123';
-      const updateDto = { name: 'Updated Product' };
+      const updateDto = { detalle: 'Producto actualizado' };
       const result = { id, ...updateDto };
       jest.spyOn(productsService, 'update').mockResolvedValue(result as any);
 
@@ -222,7 +191,7 @@ describe('ProductsController (CQRS)', () => {
   });
 
   describe('remove (DELETE /products/:id)', () => {
-    it('should call productsService.remove (NO CQRS yet)', async () => {
+    it('should call ProductsEsService.remove (NO CQRS yet)', async () => {
       const id = 'product-123';
       const result = { id, isActive: false };
       jest.spyOn(productsService, 'remove').mockResolvedValue(result as any);
@@ -236,7 +205,7 @@ describe('ProductsController (CQRS)', () => {
   });
 
   describe('findBySku (GET /products/sku/:sku)', () => {
-    it('should call productsService.findBySku (NO CQRS yet)', async () => {
+    it('should call ProductsEsService.findBySku (NO CQRS yet)', async () => {
       const sku = 'SKU-001';
       const result = { id: '1', sku };
       jest.spyOn(productsService, 'findBySku').mockResolvedValue(result as any);
@@ -249,7 +218,7 @@ describe('ProductsController (CQRS)', () => {
   });
 
   describe('findByBarcode (GET /products/barcode/:barcode)', () => {
-    it('should call productsService.findByBarcode (NO CQRS yet)', async () => {
+    it('should call ProductsEsService.findByBarcode (NO CQRS yet)', async () => {
       const barcode = '123456789';
       const result = { id: '1', barcode };
       jest.spyOn(productsService, 'findByBarcode').mockResolvedValue(result as any);
@@ -262,7 +231,7 @@ describe('ProductsController (CQRS)', () => {
   });
 
   describe('getTotalInventoryValue (GET /products/total-value)', () => {
-    it('should call productsService.getTotalInventoryValue (NO CQRS yet)', async () => {
+    it('should call ProductsEsService.getTotalInventoryValue (NO CQRS yet)', async () => {
       const result = { totalValue: 125430.5 };
       jest.spyOn(productsService, 'getTotalInventoryValue').mockResolvedValue(result as any);
 

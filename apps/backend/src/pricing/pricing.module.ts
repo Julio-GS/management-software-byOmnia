@@ -3,6 +3,7 @@ import { CqrsModule } from '@nestjs/cqrs';
 import { PricingService } from './pricing.service';
 import { PricingController } from './pricing.controller';
 import { PricingRepository } from './repositories/pricing.repository';
+import { MarkupCalculatorService } from './services/markup-calculator.service';
 import { PrismaModule } from '../database/prisma.module';
 import { SyncModule } from '../sync/sync.module';
 
@@ -16,7 +17,8 @@ import { SyncModule } from '../sync/sync.module';
   providers: [
     PricingService,
     PricingRepository,
+    MarkupCalculatorService,
   ],
-  exports: [PricingService],
+  exports: [PricingService, MarkupCalculatorService],
 })
 export class PricingModule {}

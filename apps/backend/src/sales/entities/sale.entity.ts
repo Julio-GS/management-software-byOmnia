@@ -7,8 +7,8 @@
 export class Sale {
   constructor(
     public readonly id: string,
-    public readonly saleNumber: string,
-    public readonly items: Array<{
+    public readonly numero_ticket: string,
+    public readonly detalle_ventas: Array<{
       productId: string;
       quantity: number;
       unitPrice: number;
@@ -32,7 +32,7 @@ export class Sale {
    * Updates the total property.
    */
   calculateTotal(): number {
-    this.total = this.items.reduce((sum, item) => sum + item.subtotal, 0);
+    this.total = this.detalle_ventas.reduce((sum, item) => sum + item.subtotal, 0);
     return this.total;
   }
 
@@ -57,11 +57,11 @@ export class Sale {
    * Validate business rules.
    */
   validate(): void {
-    if (!this.saleNumber || this.saleNumber.trim().length === 0) {
+    if (!this.numero_ticket || this.numero_ticket.trim().length === 0) {
       throw new Error('Sale number is required');
     }
 
-    if (this.items.length === 0) {
+    if (this.detalle_ventas.length === 0) {
       throw new Error('Sale must have at least one item');
     }
 
@@ -76,9 +76,9 @@ export class Sale {
   static fromPersistence(data: any): Sale {
     return new Sale(
       data.id,
-      data.saleNumber,
-      data.items || [],
-      typeof data.totalAmount === 'object' ? Number(data.totalAmount) : data.totalAmount,
+      data.numero_ticket,
+      data.detalle_ventas || [],
+      typeof data.total === 'object' ? Number(data.total) : data.total,
       data.paymentMethod,
       data.status,
       data.createdAt,
@@ -92,8 +92,8 @@ export class Sale {
   toJSON(): any {
     return {
       id: this.id,
-      saleNumber: this.saleNumber,
-      items: this.items,
+      numero_ticket: this.numero_ticket,
+      detalle_ventas: this.detalle_ventas,
       total: this.total,
       paymentMethod: this.paymentMethod,
       status: this.status,

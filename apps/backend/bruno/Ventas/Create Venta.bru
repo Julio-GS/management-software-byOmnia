@@ -1,0 +1,33 @@
+meta {
+  name: Create Venta (Online)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/ventas
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "caja_id": "{{cajaId}}",
+    "items": [
+      {
+        "producto_id": "{{productoId}}",
+        "cantidad": 2
+      }
+    ],
+    "medios_pago": [
+      {
+        "medio_pago": "debito",
+        "monto": 2000
+      }
+    ]
+  }
+}

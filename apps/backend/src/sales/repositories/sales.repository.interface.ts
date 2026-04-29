@@ -1,63 +1,26 @@
-import { Sale } from '../entities/sale.entity';
-
-/**
- * ISalesRepository
- * 
- * Repository interface for Sales data access.
- * Defines contracts for persistence operations without exposing Prisma dependencies.
- */
 export interface ISalesRepository {
-  /**
-   * Create a new sale.
-   * @throws RepositoryException on database errors
-   */
-  create(dto: {
-    saleNumber: string;
-    items: Array<{
-      productId: string;
-      quantity: number;
-      unitPrice: number;
-      subtotal: number;
-      productName: string;
-    }>;
-    total: number;
-    paymentMethod: string;
-    status: string;
-    userId?: string;
-  }): Promise<Sale>;
+  // Control de transacciones
+  executeTransaction<T>(fn: (tx: any) => Promise<T>, options?: any): Promise<T>;
 
-  /**
-   * Find a sale by ID.
-   * @returns Sale entity or null if not found
-   */
-  findById(id: string): Promise<Sale | null>;
+  // Métodos para el flujo de creación (aceptan tx)
+  findCajaById(id: string, tx?: any): Promise<any>;
+  findProductosActivos(ids: string[], tx?: any): Promise<any[]>;
+  getStockDisponible(productoId: string, tx?: any): Promise<number>;
+  findLotesDisponibles(productoId: string, tx?: any): Promise<any[]>;
+  getUltimaVentaCajaByPrefix(cajaId: string, prefix: string, tx?: any): Promise<any>;
+  
+  crearVenta(data: any, tx?: any): Promise<any>;
+  crearDetallesVenta(data: any[], tx?: any): Promise<any>;
+  crearMediosPago(data: any[], tx?: any): Promise<any>;
+  crearMovimientosStock(data: any[], tx?: any): Promise<any>;
+  getVentaCompleta(id: string, tx?: any): Promise<any>;
 
-  /**
-   * Update an existing sale.
-   * @throws RepositoryException if sale not found or on database errors
-   */
-  update(id: string, data: Partial<{
-    status: string;
-  }>): Promise<Sale>;
-
-  /**
-   * Cancel a sale (updates status and sets cancelledAt).
-   * @throws RepositoryException if sale not found or already cancelled
-   */
-  cancel(id: string, userId: string): Promise<Sale>;
-
-  /**
-   * Find sales by date range.
-   */
-  findByDateRange(startDate: Date, endDate: Date): Promise<Sale[]>;
-
-  /**
-   * Find all sales with optional filters.
-   */
-  findAll(filters?: {
-    status?: string;
-    paymentMethod?: string;
-    startDate?: Date;
-    endDate?: Date;
-  }): Promise<Sale[]>;
+  // Consultas
+  findAll(filters: any, skip: number, take: number): Promise<[any[], number]>;
+  findOne(id: string): Promise<any>;
+  findByNumeroTicket(numeroTicket: string): Promise<any>;
+  findByCajaHoy(cajaId: string, hoy: Date, manana: Date): Promise<any[]>;
+  
+  // Modificación
+  anularVenta(id: string, motivo: string): Promise<any>;
 }

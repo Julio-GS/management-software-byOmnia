@@ -51,5 +51,5 @@ export class CreateSaleDto implements ICreateSaleDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateSaleItemDto)
-  items: CreateSaleItemDto[];
+  detalle_ventas: CreateSaleItemDto[];
 }

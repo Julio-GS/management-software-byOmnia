@@ -7,7 +7,7 @@
 # ==========================================
 
 # All markdown files at root level (except README.md and RAILWAY.md)
-*.md
+
 !README.md
 !RAILWAY.md
 
@@ -245,8 +245,7 @@ playwright/.cache/
 *.db-shm
 *.db-wal
 
-# PostgreSQL local dumps
-*.sql
+# PostgreSQL local du
 *.dump
 
 # Prisma

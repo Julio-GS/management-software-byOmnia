@@ -3,39 +3,31 @@ import { EventBus } from '@nestjs/cqrs';
 import { NotFoundException, ConflictException } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { PinoLogger } from 'nestjs-pino';
-import { ProductsService } from './products.service';
-import { ProductsRepository } from './repositories/products.repository';
-import { Product } from './entities/product.entity';
+import { ProductsEsService } from './products-es.service';
+import { ProductosRepository } from './repositories/productos.repository';
+import { createMockProducto } from '../shared/test-utils';
 import {
   ProductCreatedEvent,
   ProductUpdatedEvent,
   ProductDeletedEvent,
 } from '../shared/events';
 
-describe('ProductsService', () => {
-  let service: ProductsService;
-  let repository: jest.Mocked<ProductsRepository>;
+describe('ProductsEsService', () => {
+  let service: ProductsEsService;
+  let repository: jest.Mocked<ProductosRepository>;
   let eventBus: jest.Mocked<EventBus>;
 
-  const mockProduct = Product.fromPersistence({
+  const mockProduct = createMockProducto({
     id: '123',
-    name: 'Test Product',
-    description: 'Test Description',
-    sku: 'TEST-001',
-    barcode: '1234567890',
-    price: 100,
-    cost: 60,
-    markup: 30,
-    stock: 50,
-    minStock: 10,
-    maxStock: 200,
-    categoryId: 'cat-123',
-    isActive: true,
-    taxRate: 21,
-    imageUrl: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    deletedAt: null,
+    codigo: 'TEST-001',
+    detalle: 'Test Product',
+    codigo_barras: '1234567890',
+    precio_venta: 100,
+    costo: 60,
+    stock_minimo: 10,
+    rubro_id: 'cat-123',
+    activo: true,
+    iva: 21,
   });
 
   beforeEach(async () => {
@@ -43,12 +35,14 @@ describe('ProductsService', () => {
       create: jest.fn(),
       findAll: jest.fn(),
       findById: jest.fn(),
+      findByCodigo: jest.fn(),
       findBySku: jest.fn(),
       findByBarcode: jest.fn(),
       update: jest.fn(),
       softDelete: jest.fn(),
       save: jest.fn(),
       findLowStock: jest.fn(),
+      getTotalInventoryValue: jest.fn(),
     };
 
     const mockEventBus = {
@@ -71,9 +65,9 @@ describe('ProductsService', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        ProductsService,
+        ProductsEsService,
         {
-          provide: ProductsRepository,
+          provide: ProductosRepository,
           useValue: mockRepository,
         },
         {
@@ -91,8 +85,8 @@ describe('ProductsService', () => {
       ],
     }).compile();
 
-    service = module.get<ProductsService>(ProductsService);
-    repository = module.get(ProductsRepository);
+    service = module.get<ProductsEsService>(ProductsEsService);
+    repository = module.get(ProductosRepository);
     eventBus = module.get(EventBus);
   });
 
@@ -103,23 +97,24 @@ describe('ProductsService', () => {
   describe('create', () => {
     it('should create a product and emit ProductCreatedEvent', async () => {
       const dto = {
-        name: 'Test Product',
-        sku: 'TEST-001',
-        price: 100,
-        cost: 60,
+        detalle: 'Test Product',
+        codigo: 'TEST-001',
+        precio_venta: 100,
+        costo: 60,
       };
 
       repository.create.mockResolvedValue(mockProduct);
 
       const result = await service.create(dto);
 
-      expect(repository.create).toHaveBeenCalledWith(dto);
-      expect(result).toEqual(mockProduct.toJSON());
+      expect(repository.create).toHaveBeenCalledWith(expect.objectContaining(dto));
+      expect(result).toEqual(mockProduct);
+      // Event uses English field names (mapped in service)
       expect(eventBus.publish).toHaveBeenCalledWith(
         expect.objectContaining({
           id: mockProduct.id,
-          name: mockProduct.name,
-          sku: mockProduct.sku,
+          name: mockProduct.detalle,
+          sku: mockProduct.codigo,
         }),
       );
       expect(eventBus.publish).toHaveBeenCalledWith(
@@ -127,12 +122,39 @@ describe('ProductsService', () => {
       );
     });
 
+    it('should auto-set requiere_precio_manual when es_codigo_especial is true', async () => {
+      const dto = {
+        detalle: 'F1',
+        codigo: 'F',
+        precio_venta: 0,
+        costo: 0,
+        es_codigo_especial: true,
+      };
+
+      const specialProduct = createMockProducto({
+        ...dto,
+        requiere_precio_manual: true,
+        maneja_stock: false,
+      });
+
+      repository.create.mockResolvedValue(specialProduct);
+
+      await service.create(dto);
+
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requiere_precio_manual: true,
+          maneja_stock: false,
+        }),
+      );
+    });
+
     it('should propagate ConflictException from repository', async () => {
       const dto = {
-        name: 'Test Product',
-        sku: 'TEST-001',
-        price: 100,
-        cost: 60,
+        detalle: 'Test Product',
+        codigo: 'TEST-001',
+        precio_venta: 100,
+        costo: 60,
       };
 
       repository.create.mockRejectedValue(
@@ -145,40 +167,40 @@ describe('ProductsService', () => {
   });
 
   describe('findAll', () => {
-    it('should return all products', async () => {
+    it('should return all products with filters', async () => {
       repository.findAll.mockResolvedValue([mockProduct]);
 
-      const result = await service.findAll();
+      const result = await service.findAll({ page: 1, limit: 20 });
 
-      expect(repository.findAll).toHaveBeenCalledWith(undefined);
-      expect(result).toEqual([mockProduct.toJSON()]);
+      expect(repository.findAll).toHaveBeenCalledWith({ page: 1, limit: 20 });
+      expect(result).toEqual([mockProduct]);
     });
 
     it('should filter products by category', async () => {
       repository.findAll.mockResolvedValue([mockProduct]);
 
-      const result = await service.findAll({ categoryId: 'cat-123' });
+      const result = await service.findAll({ rubro_id: 'cat-123', page: 1, limit: 20 });
 
-      expect(repository.findAll).toHaveBeenCalledWith({ categoryId: 'cat-123' });
-      expect(result).toEqual([mockProduct.toJSON()]);
+      expect(repository.findAll).toHaveBeenCalledWith({ rubro_id: 'cat-123', page: 1, limit: 20 });
+      expect(result).toEqual([mockProduct]);
     });
 
     it('should filter products by active status', async () => {
       repository.findAll.mockResolvedValue([mockProduct]);
 
-      const result = await service.findAll({ isActive: true });
+      const result = await service.findAll({ activo: true, page: 1, limit: 20 });
 
-      expect(repository.findAll).toHaveBeenCalledWith({ isActive: true });
-      expect(result).toEqual([mockProduct.toJSON()]);
+      expect(repository.findAll).toHaveBeenCalledWith({ activo: true, page: 1, limit: 20 });
+      expect(result).toEqual([mockProduct]);
     });
 
     it('should search products by text', async () => {
       repository.findAll.mockResolvedValue([mockProduct]);
 
-      const result = await service.findAll({ search: 'test' });
+      const result = await service.findAll({ search: 'test', page: 1, limit: 20 });
 
-      expect(repository.findAll).toHaveBeenCalledWith({ search: 'test' });
-      expect(result).toEqual([mockProduct.toJSON()]);
+      expect(repository.findAll).toHaveBeenCalledWith({ search: 'test', page: 1, limit: 20 });
+      expect(result).toEqual([mockProduct]);
     });
   });
 
@@ -189,7 +211,7 @@ describe('ProductsService', () => {
       const result = await service.findOne('123');
 
       expect(repository.findById).toHaveBeenCalledWith('123');
-      expect(result).toEqual(mockProduct.toJSON());
+      expect(result).toEqual(mockProduct);
     });
 
     it('should throw NotFoundException when product not found', async () => {
@@ -200,17 +222,18 @@ describe('ProductsService', () => {
   });
 
   describe('findBySku', () => {
-    it('should return a product by SKU', async () => {
-      repository.findBySku.mockResolvedValue(mockProduct);
+    it('should return a product by SKU (codigo)', async () => {
+      // findBySku calls findByCodigo internally
+      repository.findByCodigo.mockResolvedValue(mockProduct);
 
       const result = await service.findBySku('TEST-001');
 
-      expect(repository.findBySku).toHaveBeenCalledWith('TEST-001');
-      expect(result).toEqual(mockProduct.toJSON());
+      expect(repository.findByCodigo).toHaveBeenCalledWith('TEST-001');
+      expect(result).toEqual(mockProduct);
     });
 
     it('should throw NotFoundException when product not found', async () => {
-      repository.findBySku.mockResolvedValue(null);
+      repository.findByCodigo.mockResolvedValue(null);
 
       await expect(service.findBySku('NONEXISTENT')).rejects.toThrow(
         NotFoundException,
@@ -225,7 +248,7 @@ describe('ProductsService', () => {
       const result = await service.findByBarcode('1234567890');
 
       expect(repository.findByBarcode).toHaveBeenCalledWith('1234567890');
-      expect(result).toEqual(mockProduct.toJSON());
+      expect(result).toEqual(mockProduct);
     });
 
     it('should throw NotFoundException when product not found', async () => {
@@ -239,10 +262,10 @@ describe('ProductsService', () => {
 
   describe('update', () => {
     it('should update a product and emit ProductUpdatedEvent', async () => {
-      const dto = { name: 'Updated Product' };
-      const updatedProduct = Product.fromPersistence({
-        ...mockProduct.toJSON(),
-        name: 'Updated Product',
+      const dto = { detalle: 'Updated Product' };
+      const updatedProduct = createMockProducto({
+        ...mockProduct,
+        detalle: 'Updated Product',
       });
 
       repository.update.mockResolvedValue(updatedProduct);
@@ -250,7 +273,7 @@ describe('ProductsService', () => {
       const result = await service.update('123', dto);
 
       expect(repository.update).toHaveBeenCalledWith('123', dto);
-      expect(result).toEqual(updatedProduct.toJSON());
+      expect(result).toEqual(updatedProduct);
       expect(eventBus.publish).toHaveBeenCalledWith(
         expect.any(ProductUpdatedEvent),
       );
@@ -261,7 +284,7 @@ describe('ProductsService', () => {
         new NotFoundException('Product with ID 999 not found'),
       );
 
-      await expect(service.update('999', { name: 'Test' })).rejects.toThrow(
+      await expect(service.update('999', { detalle: 'Test' })).rejects.toThrow(
         NotFoundException,
       );
       expect(eventBus.publish).not.toHaveBeenCalled();
@@ -273,7 +296,7 @@ describe('ProductsService', () => {
       );
 
       await expect(
-        service.update('123', { sku: 'TEST-001' }),
+        service.update('123', { codigo: 'TEST-001' }),
       ).rejects.toThrow(ConflictException);
       expect(eventBus.publish).not.toHaveBeenCalled();
     });
@@ -281,10 +304,9 @@ describe('ProductsService', () => {
 
   describe('remove', () => {
     it('should soft delete a product and emit ProductDeletedEvent', async () => {
-      const deletedProduct = Product.fromPersistence({
-        ...mockProduct.toJSON(),
-        isActive: false,
-        deletedAt: new Date(),
+      const deletedProduct = createMockProducto({
+        ...mockProduct,
+        activo: false,
       });
 
       repository.softDelete.mockResolvedValue(deletedProduct);
@@ -292,7 +314,7 @@ describe('ProductsService', () => {
       const result = await service.remove('123');
 
       expect(repository.softDelete).toHaveBeenCalledWith('123');
-      expect(result).toEqual(deletedProduct.toJSON());
+      expect(result).toEqual(deletedProduct);
       expect(eventBus.publish).toHaveBeenCalledWith(
         expect.any(ProductDeletedEvent),
       );
@@ -311,91 +333,11 @@ describe('ProductsService', () => {
     });
   });
 
-  describe('updateStock', () => {
-    it('should add stock using domain entity logic', async () => {
-      repository.findById.mockResolvedValue(mockProduct);
-      
-      const updatedProduct = Product.fromPersistence({
-        ...mockProduct.toJSON(),
-        stock: 60, // 50 + 10
-      });
-      repository.save.mockResolvedValue(updatedProduct);
-
-      const result = await service.updateStock('123', 10);
-
-      expect(repository.findById).toHaveBeenCalledWith('123');
-      expect(repository.save).toHaveBeenCalledWith(expect.any(Product));
-      expect(result).toEqual(updatedProduct.toJSON());
-      expect(result.stock).toBe(60);
-      expect(eventBus.publish).toHaveBeenCalledWith(
-        expect.any(ProductUpdatedEvent),
-      );
-    });
-
-    it('should remove stock using domain entity logic', async () => {
-      repository.findById.mockResolvedValue(mockProduct);
-      
-      const updatedProduct = Product.fromPersistence({
-        ...mockProduct.toJSON(),
-        stock: 45, // 50 - 5
-      });
-      repository.save.mockResolvedValue(updatedProduct);
-
-      const result = await service.updateStock('123', -5);
-
-      expect(repository.findById).toHaveBeenCalledWith('123');
-      expect(repository.save).toHaveBeenCalledWith(expect.any(Product));
-      expect(result).toEqual(updatedProduct.toJSON());
-      expect(result.stock).toBe(45);
-    });
-
-    it('should throw error when removing more stock than available', async () => {
-      repository.findById.mockResolvedValue(mockProduct);
-
-      // Domain entity will throw error
-      await expect(service.updateStock('123', -100)).rejects.toThrow(
-        'Insufficient stock',
-      );
-
-      expect(repository.save).not.toHaveBeenCalled();
-      expect(eventBus.publish).not.toHaveBeenCalled();
-    });
-
-    it('should do nothing when quantity is 0', async () => {
-      const productCopy = Product.fromPersistence(mockProduct.toJSON());
-      repository.findById.mockResolvedValue(productCopy);
-      
-      // When saved, return a product with the same stock
-      const savedProduct = Product.fromPersistence({
-        ...mockProduct.toJSON(),
-        stock: 50, // Unchanged
-      });
-      repository.save.mockResolvedValue(savedProduct);
-
-      const result = await service.updateStock('123', 0);
-
-      expect(repository.findById).toHaveBeenCalledWith('123');
-      expect(repository.save).toHaveBeenCalled();
-      expect(result.stock).toBe(50); // Unchanged
-    });
-
-    it('should throw NotFoundException when product not found', async () => {
-      repository.findById.mockResolvedValue(null);
-
-      await expect(service.updateStock('999', 10)).rejects.toThrow(
-        NotFoundException,
-      );
-
-      expect(repository.save).not.toHaveBeenCalled();
-      expect(eventBus.publish).not.toHaveBeenCalled();
-    });
-  });
-
   describe('getLowStockProducts', () => {
     it('should return products with low stock', async () => {
-      const lowStockProduct = Product.fromPersistence({
-        ...mockProduct.toJSON(),
-        stock: 5, // Below minStock of 10
+      const lowStockProduct = createMockProducto({
+        ...mockProduct,
+        stock_minimo: 10,
       });
 
       repository.findLowStock.mockResolvedValue([lowStockProduct]);
@@ -403,8 +345,7 @@ describe('ProductsService', () => {
       const result = await service.getLowStockProducts();
 
       expect(repository.findLowStock).toHaveBeenCalled();
-      expect(result).toEqual([lowStockProduct.toJSON()]);
-      expect(result[0].stock).toBeLessThanOrEqual(result[0].minStock);
+      expect(result).toEqual([lowStockProduct]);
     });
 
     it('should return empty array when no low stock products', async () => {
@@ -414,6 +355,33 @@ describe('ProductsService', () => {
 
       expect(repository.findLowStock).toHaveBeenCalled();
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('getTotalInventoryValue', () => {
+    it('should return total inventory value', async () => {
+      repository.getTotalInventoryValue.mockResolvedValue(5000);
+
+      const result = await service.getTotalInventoryValue();
+
+      expect(repository.getTotalInventoryValue).toHaveBeenCalled();
+      expect(result).toEqual({ totalValue: 5000 });
+    });
+  });
+
+  describe('bulkUpdatePrices', () => {
+    it('should update prices for multiple products', async () => {
+      const updates = [
+        { producto_id: '123', nuevo_costo: 70, nuevo_precio: 110 },
+        { producto_id: '456', nuevo_costo: 50, nuevo_precio: 80 },
+      ];
+
+      repository.update.mockResolvedValue(mockProduct);
+
+      const result = await service.bulkUpdatePrices(updates);
+
+      expect(repository.update).toHaveBeenCalledTimes(2);
+      expect(result).toEqual({ updated: 2 });
     });
   });
 });

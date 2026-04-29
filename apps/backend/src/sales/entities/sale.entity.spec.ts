@@ -4,14 +4,14 @@ describe('Sale', () => {
   describe('calculateTotal', () => {
     it('should calculate total from items', () => {
       // Arrange
-      const items = [
+      const detalle_ventas = [
         { productId: 'prod-1', quantity: 2, unitPrice: 50.0, subtotal: 100.0, productName: 'Product 1' },
         { productId: 'prod-2', quantity: 1, unitPrice: 30.5, subtotal: 30.5, productName: 'Product 2' },
       ];
       const sale = new Sale(
         'sale-001',
         'SALE-001',
-        items,
+        detalle_ventas,
         0, // Will be recalculated
         'CASH',
         'COMPLETED',
@@ -39,12 +39,12 @@ describe('Sale', () => {
 
     it('should handle multiple items with different quantities', () => {
       // Arrange
-      const items = [
+      const detalle_ventas = [
         { productId: 'prod-1', quantity: 5, unitPrice: 10.0, subtotal: 50.0, productName: 'Product 1' },
         { productId: 'prod-2', quantity: 3, unitPrice: 25.0, subtotal: 75.0, productName: 'Product 2' },
         { productId: 'prod-3', quantity: 1, unitPrice: 100.0, subtotal: 100.0, productName: 'Product 3' },
       ];
-      const sale = new Sale('sale-003', 'SALE-003', items, 0, 'CREDIT_CARD', 'COMPLETED', new Date());
+      const sale = new Sale('sale-003', 'SALE-003', detalle_ventas, 0, 'CREDIT_CARD', 'COMPLETED', new Date());
 
       // Act
       const total = sale.calculateTotal();
@@ -152,7 +152,7 @@ describe('Sale', () => {
       expect(() => sale.validate()).toThrow('Sale total must be non-negative');
     });
 
-    it('should throw error when saleNumber is empty', () => {
+    it('should throw error when numero_ticket is empty', () => {
       // Arrange
       const sale = new Sale(
         'sale-004',

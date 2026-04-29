@@ -1,17 +1,13 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { EventBus } from '@nestjs/cqrs';
-import { CreateMovementDto } from './dto/create-movement.dto';
-import { StockAdjustmentDto } from './dto/stock-adjustment.dto';
-import { BulkMovementDto, BulkMovementResponseDto, BulkMovementError } from './dto/bulk-movement.dto';
-import { MovementType } from './entities/inventory-movement.entity';
 import { InventoryRepository } from './repositories/inventory.repository';
-import { InventoryMovementEvent, PriceChangedEvent } from '../shared/events';
+import { StockMovement } from './entities/inventory-movement.entity';
 
 /**
- * InventoryService
+ * InventoryService - Spanish field names
  * 
- * Implements business logic for inventory management.
- * Uses repository pattern for data access and EventBus for cross-module communication.
+ * Implements business logic for inventory (movimientos_stock).
+ * Integrates with LotesModule for batch tracking.
  */
 @Injectable()
 export class InventoryService {
@@ -23,292 +19,260 @@ export class InventoryService {
   ) {}
 
   /**
-   * Create a new inventory movement.
-   * Calculates new stock based on movement type and updates product stock atomically.
-   * Emits InventoryMovementEvent for other modules to react.
-   * @throws NotFoundException if product not found
-   * @throws BadRequestException for invalid movement type
+   * Get all stock movements with filters
    */
-  async createMovement(createMovementDto: CreateMovementDto) {
-    // Verify product exists and get current stock
-    const product = await this.repository.findProductById(createMovementDto.productId);
+  async getMovimientos(params?: {
+    tipo_movimiento?: string;
+    producto_id?: string;
+    fecha_inicio?: Date;
+    fecha_fin?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<StockMovement[]> {
+    return this.repository.findAll(params);
+  }
 
-    if (!product) {
-      throw new NotFoundException(`Product with ID ${createMovementDto.productId} not found`);
+  /**
+   * Get a single movimiento by ID
+   */
+  async getMovimientoById(id: string): Promise<StockMovement> {
+    const movimiento = await this.repository.findById(id);
+    
+    if (!movimiento) {
+      throw new NotFoundException(`Movimiento con ID ${id} no encontrado`);
+    }
+    
+    return movimiento;
+  }
+
+  /**
+   * Get movement history for a producto
+   */
+  async getMovimientosByProducto(productoId: string, limit?: number): Promise<StockMovement[]> {
+    return this.repository.findByProducto(productoId, limit);
+  }
+
+  /**
+   * Record an entrada (stock entry)
+   * Creates movimiento_stock record and updates lote quantity
+   */
+  async registrarEntrada(params: {
+    producto_id: string;
+    lote_id: string;
+    cantidad: number;
+    referencia?: string;
+    observaciones?: string;
+    usuario_id?: string;
+  }): Promise<StockMovement> {
+    if (!params.producto_id) {
+      throw new BadRequestException('Producto ID es requerido');
+    }
+    if (!params.lote_id) {
+      throw new BadRequestException('Lote ID es requerido');
+    }
+    if (params.cantidad <= 0) {
+      throw new BadRequestException('Cantidad debe ser mayor a 0');
     }
 
-    // Calculate new stock based on movement type
-    const previousStock = product.stock;
-    let newStock = previousStock;
+    this.logger.log({ 
+      producto_id: params.producto_id, 
+      lote_id: params.lote_id, 
+      cantidad: params.cantidad 
+    }, 'Registrando entrada de stock');
 
-    switch (createMovementDto.type) {
-      case 'ENTRY':
-        newStock = previousStock + Math.abs(createMovementDto.quantity);
-        break;
-      case 'EXIT':
-        newStock = previousStock - Math.abs(createMovementDto.quantity);
-        // ALLOW negative stock (offline scenarios where sync lag causes temporary negative stock)
-        if (newStock < 0) {
-          this.logger.warn(
-            `Stock for product ${createMovementDto.productId} went negative: ${newStock}`,
-          );
-        }
-        break;
-      case 'ADJUSTMENT':
-        // For adjustments, quantity can be positive or negative
-        newStock = previousStock + createMovementDto.quantity;
-        break;
-      default:
-        throw new BadRequestException(`Invalid movement type: ${createMovementDto.type}`);
-    }
-
-    // Create movement using repository (handles transaction)
-    const movement = await this.repository.createMovement(
-      createMovementDto,
-      previousStock,
-      newStock,
+    return this.repository.recordEntrada(
+      params.producto_id,
+      params.lote_id,
+      params.cantidad,
+      {
+        referencia: params.referencia,
+        observaciones: params.observaciones,
+        usuario_id: params.usuario_id,
+      },
     );
+  }
 
-    // Emit event for sync module and other interested parties
-    this.eventBus.publish(
-      new InventoryMovementEvent(
-        movement.productId,
-        movement.quantity,
-        this.mapMovementTypeToEventType(movement.type),
-        movement.reason,
-        movement.newStock,
-      ),
+  /**
+   * Record an ajuste (stock adjustment)
+   */
+  async registrarAjuste(params: {
+    producto_id: string;
+    newStock: number;
+    lote_id?: string;
+    referencia?: string;
+    observaciones?: string;
+    usuario_id?: string;
+  }): Promise<StockMovement> {
+    if (!params.producto_id) {
+      throw new BadRequestException('Producto ID es requerido');
+    }
+    if (params.newStock < 0) {
+      throw new BadRequestException('Stock no puede ser negativo');
+    }
+
+    this.logger.log({
+      producto_id: params.producto_id,
+      newStock: params.newStock,
+    }, 'Registrando ajuste de stock');
+
+    return this.repository.recordAjuste(
+      params.producto_id,
+      params.newStock,
+      {
+        lote_id: params.lote_id,
+        referencia: params.referencia,
+        observaciones: params.observaciones,
+        usuario_id: params.usuario_id,
+      },
     );
-
-    return movement.toJSON();
   }
 
   /**
-   * Adjust stock to a specific value.
-   * Creates an ADJUSTMENT movement with the difference.
-   * Emits InventoryMovementEvent for other modules to react.
-   * @throws NotFoundException if product not found
+   * Record merma (shrinkage/loss)
    */
-  async adjustStock(adjustmentDto: StockAdjustmentDto) {
-    // Verify product exists and get current stock
-    const product = await this.repository.findProductById(adjustmentDto.productId);
-
-    if (!product) {
-      throw new NotFoundException(`Product with ID ${adjustmentDto.productId} not found`);
+  async registrarMerma(params: {
+    producto_id: string;
+    lote_id: string;
+    cantidad: number;
+    referencia?: string;
+    observaciones?: string;
+    usuario_id?: string;
+  }): Promise<StockMovement> {
+    if (!params.producto_id) {
+      throw new BadRequestException('Producto ID es requerido');
+    }
+    if (!params.lote_id) {
+      throw new BadRequestException('Lote ID es requerido');
+    }
+    if (params.cantidad <= 0) {
+      throw new BadRequestException('Cantidad debe ser mayor a 0');
     }
 
-    const previousStock = product.stock;
+    this.logger.log({
+      producto_id: params.producto_id,
+      lote_id: params.lote_id,
+      cantidad: params.cantidad,
+    }, 'Registrando merma');
 
-    // Allow negative stock (offline scenarios)
-    if (adjustmentDto.newStock < 0) {
-      this.logger.warn(
-        `Stock adjustment for product ${adjustmentDto.productId} resulted in negative stock: ${adjustmentDto.newStock}`,
-      );
-    }
-
-    // Create adjustment using repository (handles transaction)
-    const movement = await this.repository.adjustStock(adjustmentDto, previousStock);
-
-    // Emit event for sync module
-    this.eventBus.publish(
-      new InventoryMovementEvent(
-        movement.productId,
-        movement.quantity,
-        'ADJUSTMENT',
-        movement.reason,
-        movement.newStock,
-      ),
+    return this.repository.recordMerma(
+      params.producto_id,
+      params.lote_id,
+      params.cantidad,
+      {
+        referencia: params.referencia,
+        observaciones: params.observaciones,
+        usuario_id: params.usuario_id,
+      },
     );
-
-    return movement.toJSON();
   }
 
   /**
-   * Get movement history for a specific product.
-   * @throws NotFoundException if product not found
+   * Get total stock for a producto (sum from lotes)
    */
-  async getProductHistory(productId: string, limit?: number) {
-    // Verify product exists (repository throws if not found)
-    const product = await this.repository.findProductById(productId);
-
-    if (!product) {
-      throw new NotFoundException(`Product with ID ${productId} not found`);
-    }
-
-    const movements = await this.repository.getProductHistory(productId, limit);
-    return movements.map((m) => m.toJSON());
+  async getTotalStock(productoId: string): Promise<number> {
+    return this.repository.getTotalStock(productoId);
   }
 
   /**
-   * Get all movements with optional filters.
+   * Get productos with low stock
+   * Returns products where total stock < stock_minimo
    */
-  async getAllMovements(params?: {
-    type?: MovementType;
-    startDate?: Date;
-    endDate?: Date;
-    productId?: string;
-  }) {
-    const movements = await this.repository.getAllMovements(params);
-    return movements.map((m) => m.toJSON());
+  async getLowStock(): Promise<any[]> {
+    return this.repository.findLowStock();
   }
 
   /**
-   * Get products with low stock (below minimum threshold).
-   * @param threshold Optional custom threshold (defaults to product's minStock value)
+   * Create general stock movement (for non-lote tracking)
    */
-  async getLowStockProducts(threshold?: number) {
-    return this.repository.getLowStockProducts(threshold);
+  async createMovimiento(params: {
+    producto_id: string;
+    tipo_movimiento: string;
+    cantidad: number;
+    lote_id?: string;
+    referencia?: string;
+    observaciones?: string;
+    usuario_id?: string;
+  }): Promise<StockMovement> {
+    return this.repository.createMovimiento(params);
   }
 
-  async createBulkMovement(bulkDto: BulkMovementDto): Promise<BulkMovementResponseDto> {
-    const movements: Record<string, unknown>[] = [];
-    const errors: BulkMovementError[] = [];
+  /**
+   * English alias for createMovimiento()
+   * Adapts English parameters to Spanish
+   */
+  async createMovement(params: {
+    productId: string;
+    quantity: number;
+    type: string;
+    reason?: string;
+  }): Promise<StockMovement> {
+    return this.createMovimiento({
+      producto_id: params.productId,
+      tipo_movimiento: params.type,
+      cantidad: params.quantity,
+      referencia: params.reason,
+    });
+  }
 
-    if (!bulkDto.items?.length) {
-      throw new BadRequestException('At least one item is required');
-    }
+  /**
+   * English alias for registrarAjuste()
+   */
+  async adjustStock(adjustmentDto: any): Promise<StockMovement> {
+    return this.registrarAjuste({
+      producto_id: adjustmentDto.productId,
+      newStock: adjustmentDto.newStock || adjustmentDto.quantity,
+      referencia: adjustmentDto.reason,
+      usuario_id: adjustmentDto.userId,
+    });
+  }
 
-    if (bulkDto.items.length > 100) {
-      throw new BadRequestException('Maximum 100 items allowed per request');
-    }
-
-    const productIds = bulkDto.items.map(item => item.productId);
-    const uniqueIds = new Set(productIds);
-    if (uniqueIds.size !== productIds.length) {
-      throw new BadRequestException('Duplicate product IDs are not allowed');
-    }
-
-    const continueOnError = bulkDto.continueOnError ?? false;
-
-    for (const item of bulkDto.items) {
-      if (item.enabled === false) {
-        continue;
-      }
-
+  /**
+   * English alias for bulk movements
+   */
+  async createBulkMovement(bulkMovementDto: any): Promise<any> {
+    const results = [];
+    for (const item of bulkMovementDto.items || []) {
       try {
-        const product = await this.repository.findProductById(item.productId);
-        if (!product) {
-          const error: BulkMovementError = {
-            productId: item.productId,
-            error: 'Product not found',
-            code: 'PRODUCT_NOT_FOUND'
-          };
-          errors.push(error);
-          if (!continueOnError) {
-            break;
-          }
-          continue;
-        }
-
-        let newStock: number;
-        let movementType: MovementType;
-        let quantity: number;
-
-        if (item.setStockTo !== undefined) {
-          newStock = Math.max(0, item.setStockTo);
-          movementType = 'ADJUSTMENT';
-          quantity = newStock - product.stock;
-        } else if (item.stockQuantity !== undefined) {
-          movementType = item.movementType || (item.stockQuantity > 0 ? 'ENTRY' : 'EXIT');
-          const absQuantity = Math.abs(item.stockQuantity);
-          quantity = item.stockQuantity;
-
-          if (movementType === 'ENTRY') {
-            newStock = product.stock + absQuantity;
-          } else if (movementType === 'EXIT') {
-            newStock = Math.max(0, product.stock - absQuantity);
-          } else {
-            newStock = product.stock + item.stockQuantity;
-          }
-        } else {
-          newStock = product.stock;
-          movementType = 'ADJUSTMENT';
-          quantity = 0;
-        }
-
-        // Handle price change (independent of stock)
-        const currentPrice = Number(product.price);
-        const newPrice = item.newPrice !== undefined ? item.newPrice : currentPrice;
-        const priceChanged = item.newPrice !== undefined && item.newPrice !== currentPrice;
-
-        const movement = await this.repository.createMovementWithPrice(
-          {
-            productId: item.productId,
-            type: movementType,
-            quantity,
-            reason: bulkDto.reason,
-            reference: bulkDto.reference,
-            notes: bulkDto.notes,
-          },
-          product.stock,
-          newStock,
-          newPrice
-        );
-
-        movements.push(movement.toJSON());
-
-        if (priceChanged) {
-          this.eventBus.publish(
-            new PriceChangedEvent(
-              item.productId,
-              currentPrice,
-              item.newPrice!,
-              bulkDto.reason || 'Bulk adjustment'
-            )
-          );
-        }
-
-      } catch (error) {
-        const err: BulkMovementError = {
+        const movement = await this.createMovement({
           productId: item.productId,
-          error: error.message || 'Unknown error',
-          code: 'PROCESSING_ERROR'
-        };
-        errors.push(err);
-
-        if (!continueOnError) {
-          break;
-        }
+          quantity: item.quantity,
+          type: item.type || 'ENTRY',
+          reason: item.reason,
+        });
+        results.push({ success: true, productId: item.productId, movement });
+      } catch (error) {
+        results.push({ success: false, productId: item.productId, error: error.message });
       }
     }
-
-    for (const movement of movements) {
-      this.eventBus.publish(
-        new InventoryMovementEvent(
-          movement['productId'] as string,
-          movement['quantity'] as number,
-          this.mapMovementTypeToEventType(movement['type'] as MovementType),
-          movement['reason'] as string,
-          movement['newStock'] as number
-        )
-      );
-    }
-
     return {
-      success: errors.length === 0,
-      movements,
-      errors,
-      processedCount: movements.length,
-      failedCount: errors.length,
-      message: errors.length === 0
-        ? `Successfully processed ${movements.length} items`
-        : `Processed ${movements.length} items, ${errors.length} failed`
+      success: results.every(r => r.success),
+      results,
     };
   }
 
   /**
-   * Map MovementType to event type string.
+   * English alias for getMovimientos()
    */
-  private mapMovementTypeToEventType(type: MovementType): 'IN' | 'OUT' | 'ADJUSTMENT' {
-    switch (type) {
-      case 'ENTRY':
-        return 'IN';
-      case 'EXIT':
-        return 'OUT';
-      case 'ADJUSTMENT':
-        return 'ADJUSTMENT';
-      default:
-        return 'ADJUSTMENT';
-    }
+  async getAllMovements(params?: any): Promise<StockMovement[]> {
+    return this.getMovimientos({
+      tipo_movimiento: params?.type,
+      producto_id: params?.productId,
+      fecha_inicio: params?.startDate,
+      fecha_fin: params?.endDate,
+    });
+  }
+
+  /**
+   * English alias for getLowStock()
+   */
+  async getLowStockProducts(threshold?: number): Promise<any[]> {
+    return this.getLowStock();
+  }
+
+  /**
+   * English alias for getMovimientosByProducto()
+   */
+  async getProductHistory(productId: string, limit?: number): Promise<StockMovement[]> {
+    return this.getMovimientosByProducto(productId, limit);
   }
 }

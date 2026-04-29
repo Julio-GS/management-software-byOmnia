@@ -1,45 +1,36 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { EventBus } from '@nestjs/cqrs';
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 import { InventoryRepository } from './repositories/inventory.repository';
-import { InventoryMovement, MovementType } from './entities/inventory-movement.entity';
-import { InventoryMovementEvent } from '../shared/events';
+import { StockMovement } from './entities/inventory-movement.entity';
 
 describe('InventoryService', () => {
   let service: InventoryService;
   let repository: jest.Mocked<InventoryRepository>;
-  let eventBus: jest.Mocked<EventBus>;
 
-  const mockProduct = {
-    id: 'prod-123',
-    stock: 100,
-    name: 'Test Product',
-  };
-
-  const mockMovement = InventoryMovement.fromPersistence({
+  const mockMovement = StockMovement.fromPersistence({
     id: 'mov-123',
-    productId: 'prod-123',
-    type: 'ENTRY' as MovementType,
-    quantity: 50,
-    previousStock: 100,
-    newStock: 150,
-    reason: 'Purchase',
-    reference: null,
-    notes: null,
-    userId: 'user-1',
-    deviceId: null,
-    createdAt: new Date(),
+    producto_id: 'prod-123',
+    lote_id: 'lote-123',
+    tipo_movimiento: 'ENTRADA',
+    cantidad: 50,
+    referencia: 'Factura 001',
+    observaciones: 'Ingreso inicial',
+    usuario_id: 'user-1',
+    fecha: new Date(),
   });
 
   beforeEach(async () => {
     const mockRepository = {
-      findProductById: jest.fn(),
-      createMovement: jest.fn(),
-      adjustStock: jest.fn(),
-      getProductHistory: jest.fn(),
-      getAllMovements: jest.fn(),
-      getCurrentStock: jest.fn(),
+      findAll: jest.fn(),
+      findById: jest.fn(),
+      findByProducto: jest.fn(),
+      recordEntrada: jest.fn(),
+      recordAjuste: jest.fn(),
+      recordMerma: jest.fn(),
+      getTotalStock: jest.fn(),
+      findLowStock: jest.fn(),
     };
 
     const mockEventBus = {
@@ -62,496 +53,192 @@ describe('InventoryService', () => {
 
     service = module.get<InventoryService>(InventoryService);
     repository = module.get(InventoryRepository);
-    eventBus = module.get(EventBus);
-
-    jest.clearAllMocks();
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  describe('createMovement', () => {
-    it('should create ENTRY movement and increase stock', async () => {
-      repository.findProductById.mockResolvedValue(mockProduct as any);
-      repository.createMovement.mockResolvedValue(mockMovement);
+  describe('registrarEntrada', () => {
+    it('debería registrar una entrada correctamente', async () => {
+      repository.recordEntrada.mockResolvedValue(mockMovement);
 
-      const result = await service.createMovement({
-        productId: 'prod-123',
-        type: 'ENTRY' as MovementType,
-        quantity: 50,
-        reason: 'Purchase',
-        userId: 'user-1',
-      });
+      const params = {
+        producto_id: 'prod-123',
+        lote_id: 'lote-123',
+        cantidad: 50,
+        referencia: 'Factura 001',
+      };
 
-      expect(repository.createMovement).toHaveBeenCalledWith(
-        expect.objectContaining({
-          productId: 'prod-123',
-          type: 'ENTRY' as MovementType,
-          quantity: 50,
-        }),
-        100, // previousStock
-        150, // newStock (100 + 50)
-      );
+      const result = await service.registrarEntrada(params);
 
-      expect(eventBus.publish).toHaveBeenCalledWith(
-        expect.objectContaining({
-          productId: 'prod-123',
-          quantity: 50,
-          type: 'IN',
-          newStockLevel: 150,
-        }),
-      );
-
-      expect(result).toEqual(mockMovement.toJSON());
-    });
-
-    it('should create EXIT movement and decrease stock', async () => {
-      const exitMovement = InventoryMovement.fromPersistence({
-        ...mockMovement.toJSON(),
-        type: 'EXIT' as MovementType,
-        quantity: 30,
-        newStock: 70,
-      });
-
-      repository.findProductById.mockResolvedValue(mockProduct as any);
-      repository.createMovement.mockResolvedValue(exitMovement);
-
-      const result = await service.createMovement({
-        productId: 'prod-123',
-        type: 'EXIT' as MovementType,
-        quantity: 30,
-        reason: 'Sale',
-        userId: 'user-1',
-      });
-
-      expect(repository.createMovement).toHaveBeenCalledWith(
-        expect.anything(),
-        100, // previousStock
-        70, // newStock (100 - 30)
-      );
-
-      expect(eventBus.publish).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'OUT',
-          quantity: 30,
-        }),
-      );
-
-      expect(result.newStock).toBe(70);
-    });
-
-    it('should create ADJUSTMENT movement with positive quantity', async () => {
-      const adjustmentMovement = InventoryMovement.fromPersistence({
-        ...mockMovement.toJSON(),
-        type: 'ADJUSTMENT' as MovementType,
-        quantity: 20,
-        newStock: 120,
-      });
-
-      repository.findProductById.mockResolvedValue(mockProduct as any);
-      repository.createMovement.mockResolvedValue(adjustmentMovement);
-
-      await service.createMovement({
-        productId: 'prod-123',
-        type: 'ADJUSTMENT' as MovementType,
-        quantity: 20,
-        reason: 'Correction',
-        userId: 'user-1',
-      });
-
-      expect(repository.createMovement).toHaveBeenCalledWith(
-        expect.anything(),
-        100,
-        120, // 100 + 20
-      );
-    });
-
-    it('should create ADJUSTMENT movement with negative quantity', async () => {
-      const adjustmentMovement = InventoryMovement.fromPersistence({
-        ...mockMovement.toJSON(),
-        type: 'ADJUSTMENT' as MovementType,
-        quantity: -15,
-        newStock: 85,
-      });
-
-      repository.findProductById.mockResolvedValue(mockProduct as any);
-      repository.createMovement.mockResolvedValue(adjustmentMovement);
-
-      await service.createMovement({
-        productId: 'prod-123',
-        type: 'ADJUSTMENT' as MovementType,
-        quantity: -15,
-        reason: 'Damaged goods',
-        userId: 'user-1',
-      });
-
-      expect(repository.createMovement).toHaveBeenCalledWith(
-        expect.anything(),
-        100,
-        85, // 100 + (-15)
-      );
-    });
-
-    it('should ALLOW negative stock and log warning', async () => {
-      const logSpy = jest.spyOn(service['logger'], 'warn');
-
-      repository.findProductById.mockResolvedValue({
-        ...mockProduct,
-        stock: 10,
-      } as any);
-
-      const negativeStockMovement = InventoryMovement.fromPersistence({
-        ...mockMovement.toJSON(),
-        type: 'EXIT' as MovementType,
-        quantity: 50,
-        previousStock: 10,
-        newStock: -40,
-      });
-
-      repository.createMovement.mockResolvedValue(negativeStockMovement);
-
-      const result = await service.createMovement({
-        productId: 'prod-123',
-        type: 'EXIT' as MovementType,
-        quantity: 50,
-        userId: 'user-1',
-      });
-
-      expect(result.newStock).toBe(-40);
-      expect(logSpy).toHaveBeenCalledWith(
-        expect.stringContaining('went negative: -40'),
-      );
-      expect(repository.createMovement).toHaveBeenCalledWith(
-        expect.anything(),
-        10,
-        -40,
-      );
-    });
-
-    it('should use MovementType enum correctly', async () => {
-      repository.findProductById.mockResolvedValue(mockProduct as any);
-      repository.createMovement.mockResolvedValue(mockMovement);
-
-      await service.createMovement({
-        productId: 'prod-123',
-        type: 'ENTRY' as MovementType,
-        quantity: 10,
-        userId: 'user-1',
-      });
-
-      expect(repository.createMovement).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'ENTRY' as MovementType,
-        }),
-        expect.any(Number),
-        expect.any(Number),
-      );
-    });
-
-    it('should throw NotFoundException when product does not exist', async () => {
-      repository.findProductById.mockResolvedValue(null);
-
-      await expect(
-        service.createMovement({
-          productId: 'invalid-id',
-          type: 'ENTRY' as MovementType,
-          quantity: 10,
-          userId: 'user-1',
-        }),
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it('should track userId in movement record', async () => {
-      repository.findProductById.mockResolvedValue(mockProduct as any);
-      repository.createMovement.mockResolvedValue(mockMovement);
-
-      await service.createMovement({
-        productId: 'prod-123',
-        type: 'ENTRY' as MovementType,
-        quantity: 10,
-        userId: 'user-123',
-      });
-
-      expect(repository.createMovement).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: 'user-123',
-        }),
-        expect.any(Number),
-        expect.any(Number),
-      );
-    });
-
-    it('should include User relation in movement response', async () => {
-      const movementWithUser = InventoryMovement.fromPersistence({
-        ...mockMovement.toJSON(),
-        user: {
-          id: 'user-1',
-          firstName: 'John',
-          lastName: 'Doe',
+      expect(repository.recordEntrada).toHaveBeenCalledWith(
+        'prod-123',
+        'lote-123',
+        50,
+        {
+          referencia: 'Factura 001',
+          observaciones: undefined,
+          usuario_id: undefined,
         },
-      });
-
-      repository.findProductById.mockResolvedValue(mockProduct as any);
-      repository.createMovement.mockResolvedValue(movementWithUser);
-
-      const result = await service.createMovement({
-        productId: 'prod-123',
-        type: 'ENTRY' as MovementType,
-        quantity: 10,
-        userId: 'user-1',
-      });
-
-      expect(result).toBeDefined();
-      expect(repository.createMovement).toHaveBeenCalled();
+      );
+      expect(result).toEqual(mockMovement);
     });
 
-    it('should emit InventoryMovementEvent after creating movement', async () => {
-      repository.findProductById.mockResolvedValue(mockProduct as any);
-      repository.createMovement.mockResolvedValue(mockMovement);
-
-      await service.createMovement({
-        productId: 'prod-123',
-        type: 'ENTRY' as MovementType,
-        quantity: 50,
-        reason: 'Purchase',
-        userId: 'user-1',
-      });
-
-      expect(eventBus.publish).toHaveBeenCalledTimes(1);
-      expect(eventBus.publish).toHaveBeenCalledWith(
-        expect.any(InventoryMovementEvent),
-      );
-    });
-  });
-
-  describe('adjustStock', () => {
-    it('should adjust stock to new value and create ADJUSTMENT movement', async () => {
-      const adjustmentMovement = InventoryMovement.fromPersistence({
-        id: 'mov-200',
-        productId: 'prod-123',
-        type: 'ADJUSTMENT' as MovementType,
-        quantity: 30,
-        previousStock: 50,
-        newStock: 80,
-        reason: 'Inventory count correction',
-        reference: null,
-        notes: null,
-        userId: 'user-1',
-        deviceId: null,
-        createdAt: new Date(),
-      });
-
-      repository.findProductById.mockResolvedValue({
-        ...mockProduct,
-        stock: 50,
-      } as any);
-      repository.adjustStock.mockResolvedValue(adjustmentMovement);
-
-      const result = await service.adjustStock({
-        productId: 'prod-123',
-        newStock: 80,
-        reason: 'Inventory count correction',
-        userId: 'user-1',
-      });
-
-      expect(repository.adjustStock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          productId: 'prod-123',
-          newStock: 80,
-        }),
-        50, // previousStock
-      );
-
-      expect(result.quantity).toBe(30);
-      expect(result.type).toBe('ADJUSTMENT' as MovementType);
-
-      expect(eventBus.publish).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'ADJUSTMENT',
-          newStockLevel: 80,
-        }),
-      );
-    });
-
-    it('should allow negative stock adjustment and log warning', async () => {
-      const logSpy = jest.spyOn(service['logger'], 'warn');
-
-      repository.findProductById.mockResolvedValue({
-        ...mockProduct,
-        stock: 50,
-      } as any);
-
-      const negativeAdjustment = InventoryMovement.fromPersistence({
-        ...mockMovement.toJSON(),
-        type: 'ADJUSTMENT' as MovementType,
-        quantity: -60,
-        previousStock: 50,
-        newStock: -10,
-      });
-
-      repository.adjustStock.mockResolvedValue(negativeAdjustment);
-
-      await service.adjustStock({
-        productId: 'prod-123',
-        newStock: -10,
-        reason: 'Sync correction',
-        userId: 'user-1',
-      });
-
-      expect(logSpy).toHaveBeenCalledWith(
-        expect.stringContaining('negative stock: -10'),
-      );
-      expect(repository.adjustStock).toHaveBeenCalled();
-    });
-
-    it('should throw NotFoundException when product does not exist', async () => {
-      repository.findProductById.mockResolvedValue(null);
-
+    it('debería lanzar BadRequestException si falta producto_id', async () => {
       await expect(
-        service.adjustStock({
-          productId: 'invalid-id',
-          newStock: 100,
-          reason: 'Test',
-          userId: 'user-1',
+        service.registrarEntrada({
+          producto_id: '',
+          lote_id: 'lote-123',
+          cantidad: 50,
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrow(BadRequestException);
     });
 
-    it('should emit InventoryMovementEvent after adjustment', async () => {
-      const adjustmentMovement = InventoryMovement.fromPersistence({
-        id: 'mov-300',
-        productId: 'prod-123',
-        type: 'ADJUSTMENT' as MovementType,
-        quantity: 30,
-        previousStock: 100,
-        newStock: 130,
-        reason: 'Test',
-        reference: null,
-        notes: null,
-        userId: 'user-1',
-        deviceId: null,
-        createdAt: new Date(),
-      });
-
-      repository.findProductById.mockResolvedValue(mockProduct as any);
-      repository.adjustStock.mockResolvedValue(adjustmentMovement);
-
-      await service.adjustStock({
-        productId: 'prod-123',
-        newStock: 130,
-        reason: 'Test',
-        userId: 'user-1',
-      });
-
-      expect(eventBus.publish).toHaveBeenCalledTimes(1);
-      expect(eventBus.publish).toHaveBeenCalledWith(
-        expect.any(InventoryMovementEvent),
-      );
+    it('debería lanzar BadRequestException si la cantidad es 0 o menor', async () => {
+      await expect(
+        service.registrarEntrada({
+          producto_id: 'prod-123',
+          lote_id: 'lote-123',
+          cantidad: -10,
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
-  describe('getProductHistory', () => {
-    it('should return movement history with User relation', async () => {
-      const mockMovements = [
-        InventoryMovement.fromPersistence({
-          id: 'mov-1',
-          productId: 'prod-123',
-          type: 'ENTRY' as MovementType,
-          quantity: 100,
-          previousStock: 0,
-          newStock: 100,
-          reason: null,
-          reference: null,
-          notes: null,
-          userId: 'user-1',
-          deviceId: null,
-          createdAt: new Date(),
-        }),
-        InventoryMovement.fromPersistence({
-          id: 'mov-2',
-          productId: 'prod-123',
-          type: 'EXIT' as MovementType,
-          quantity: 50,
-          previousStock: 100,
-          newStock: 50,
-          reason: null,
-          reference: null,
-          notes: null,
-          userId: 'user-2',
-          deviceId: null,
-          createdAt: new Date(),
-        }),
-      ];
+  describe('registrarAjuste', () => {
+    it('debería registrar un ajuste correctamente', async () => {
+      repository.recordAjuste.mockResolvedValue(mockMovement);
 
-      repository.findProductById.mockResolvedValue(mockProduct as any);
-      repository.getProductHistory.mockResolvedValue(mockMovements);
+      const params = {
+        producto_id: 'prod-123',
+        newStock: 100,
+        lote_id: 'lote-123',
+        observaciones: 'Ajuste por recuento',
+      };
 
-      const result = await service.getProductHistory('prod-123', 10);
+      const result = await service.registrarAjuste(params);
 
-      expect(result).toHaveLength(2);
-      expect(repository.getProductHistory).toHaveBeenCalledWith('prod-123', 10);
+      expect(repository.recordAjuste).toHaveBeenCalledWith(
+        'prod-123',
+        100,
+        {
+          lote_id: 'lote-123',
+          referencia: undefined,
+          observaciones: 'Ajuste por recuento',
+          usuario_id: undefined,
+        },
+      );
+      expect(result).toEqual(mockMovement);
     });
 
-    it('should throw NotFoundException when product does not exist', async () => {
-      repository.findProductById.mockResolvedValue(null);
+    it('debería lanzar BadRequestException si el stock nuevo es negativo', async () => {
+      await expect(
+        service.registrarAjuste({
+          producto_id: 'prod-123',
+          newStock: -5,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
 
-      await expect(service.getProductHistory('invalid-id')).rejects.toThrow(
+  describe('registrarMerma', () => {
+    it('debería registrar una merma correctamente', async () => {
+      repository.recordMerma.mockResolvedValue(mockMovement);
+
+      const result = await service.registrarMerma({
+        producto_id: 'prod-123',
+        lote_id: 'lote-123',
+        cantidad: 5,
+        observaciones: 'Producto vencido',
+      });
+
+      expect(repository.recordMerma).toHaveBeenCalledWith(
+        'prod-123',
+        'lote-123',
+        5,
+        {
+          referencia: undefined,
+          observaciones: 'Producto vencido',
+          usuario_id: undefined,
+        },
+      );
+      expect(result).toEqual(mockMovement);
+    });
+
+    it('debería lanzar BadRequestException si la cantidad es 0', async () => {
+      await expect(
+        service.registrarMerma({
+          producto_id: 'prod-123',
+          lote_id: 'lote-123',
+          cantidad: 0,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('getMovimientos', () => {
+    it('debería retornar movimientos filtrados', async () => {
+      repository.findAll.mockResolvedValue([mockMovement]);
+
+      const params = { tipo_movimiento: 'ENTRADA' };
+      const result = await service.getMovimientos(params);
+
+      expect(repository.findAll).toHaveBeenCalledWith(params);
+      expect(result).toEqual([mockMovement]);
+    });
+  });
+
+  describe('getMovimientoById', () => {
+    it('debería retornar un movimiento si existe', async () => {
+      repository.findById.mockResolvedValue(mockMovement);
+
+      const result = await service.getMovimientoById('mov-123');
+
+      expect(repository.findById).toHaveBeenCalledWith('mov-123');
+      expect(result).toEqual(mockMovement);
+    });
+
+    it('debería lanzar NotFoundException si no existe', async () => {
+      repository.findById.mockResolvedValue(null);
+
+      await expect(service.getMovimientoById('invalid')).rejects.toThrow(
         NotFoundException,
       );
     });
   });
 
-  describe('getAllMovements', () => {
-    it('should filter movements by MovementType', async () => {
-      const mockMovements = [
-        InventoryMovement.fromPersistence({
-          ...mockMovement.toJSON(),
-          id: 'mov-1',
-        }),
-        InventoryMovement.fromPersistence({
-          ...mockMovement.toJSON(),
-          id: 'mov-2',
-        }),
-      ];
+  describe('getMovimientosByProducto', () => {
+    it('debería retornar los movimientos de un producto', async () => {
+      repository.findByProducto.mockResolvedValue([mockMovement]);
 
-      repository.getAllMovements.mockResolvedValue(mockMovements);
+      const result = await service.getMovimientosByProducto('prod-123', 10);
 
-      await service.getAllMovements({ type: 'ENTRY' as MovementType });
-
-      expect(repository.getAllMovements).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'ENTRY' as MovementType,
-        }),
-      );
+      expect(repository.findByProducto).toHaveBeenCalledWith('prod-123', 10);
+      expect(result).toEqual([mockMovement]);
     });
+  });
 
-    it('should filter movements by date range', async () => {
-      const startDate = new Date('2024-01-01');
-      const endDate = new Date('2024-12-31');
+  describe('getTotalStock', () => {
+    it('debería retornar el stock total sumado', async () => {
+      repository.getTotalStock.mockResolvedValue(150);
 
-      repository.getAllMovements.mockResolvedValue([]);
+      const result = await service.getTotalStock('prod-123');
 
-      await service.getAllMovements({ startDate, endDate });
-
-      expect(repository.getAllMovements).toHaveBeenCalledWith(
-        expect.objectContaining({
-          startDate,
-          endDate,
-        }),
-      );
+      expect(repository.getTotalStock).toHaveBeenCalledWith('prod-123');
+      expect(result).toBe(150);
     });
+  });
 
-    it('should filter movements by productId', async () => {
-      repository.getAllMovements.mockResolvedValue([]);
+  describe('getLowStock', () => {
+    it('debería retornar productos con stock bajo', async () => {
+      const mockLowStock = [{ id: 'prod-1', stock_actual: 5, stock_minimo: 10 }];
+      repository.findLowStock.mockResolvedValue(mockLowStock);
 
-      await service.getAllMovements({ productId: 'prod-123' });
+      const result = await service.getLowStock();
 
-      expect(repository.getAllMovements).toHaveBeenCalledWith(
-        expect.objectContaining({
-          productId: 'prod-123',
-        }),
-      );
+      expect(repository.findLowStock).toHaveBeenCalled();
+      expect(result).toEqual(mockLowStock);
     });
   });
 });

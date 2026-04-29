@@ -1,249 +1,300 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { MovementType, Product } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
-import { InventoryMovement } from '../entities/inventory-movement.entity';
-import { CreateMovementDto } from '../dto/create-movement.dto';
-import { StockAdjustmentDto } from '../dto/stock-adjustment.dto';
+import { StockMovement, TipoMovimiento } from '../entities/inventory-movement.entity';
+import { LotesRepository } from '../../lotes/repositories/lotes.repository';
 
-interface CreateMovementWithPriceParams {
-  productId: string;
-  type: MovementType;
-  quantity: number;
-  reason?: string | null;
-  reference?: string | null;
-  notes?: string | null;
+interface CreateMovimientoParams {
+  producto_id: string;
+  lote_id?: string;
+  tipo_movimiento: string;
+  cantidad: number;
+  referencia?: string;
+  observaciones?: string;
+  usuario_id?: string;
 }
 
 /**
- * InventoryRepository
+ * InventoryRepository - Repository for movimientos_stock
  * 
- * Abstracts data access for Inventory Movements.
- * Converts between Prisma models and domain entities.
- * Handles all Prisma interactions for inventory operations.
+ * Abstracts Prisma queries using Spanish field names.
+ * Integrates with LotesModule for stock management.
  */
 @Injectable()
 export class InventoryRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly lotesRepository: LotesRepository,
+  ) {}
 
   /**
-   * Create a new inventory movement and update product stock atomically.
-   * @throws NotFoundException if product not found
+   * Create a stock movement (movimiento_stock)
+   * Creates movement record only - stock is managed via LotesModule
    */
-  async createMovement(
-    dto: CreateMovementDto,
-    previousStock: number,
-    newStock: number,
-  ): Promise<InventoryMovement> {
-    // Use transaction to ensure atomic stock update + movement creation
-    const data = await this.prisma.$transaction(async (prisma) => {
-      // Update product stock
-      await prisma.product.update({
-        where: { id: dto.productId },
-        data: { stock: newStock },
-      });
-
-      // Create movement record
-      const movement = await prisma.inventoryMovement.create({
-        data: {
-          productId: dto.productId,
-          type: dto.type,
-          quantity: dto.quantity,
-          previousStock,
-          newStock,
-          reason: dto.reason,
-          reference: dto.reference,
-          notes: dto.notes,
-          userId: dto.userId,
-          deviceId: dto.deviceId,
-        },
-        include: {
-          product: true,
-          user: true,
-        },
-      });
-
-      return movement;
-    });
-
-    return InventoryMovement.fromPersistence(data);
-  }
-
-  /**
-   * Create a stock adjustment movement and update product stock atomically.
-   * @throws NotFoundException if product not found
-   */
-  async adjustStock(
-    dto: StockAdjustmentDto,
-    previousStock: number,
-  ): Promise<InventoryMovement> {
-    const difference = dto.newStock - previousStock;
-
-    const data = await this.prisma.$transaction(async (prisma) => {
-      // Update product stock
-      await prisma.product.update({
-        where: { id: dto.productId },
-        data: { stock: dto.newStock },
-      });
-
-      // Create adjustment movement record
-      const movement = await prisma.inventoryMovement.create({
-        data: {
-          productId: dto.productId,
-          type: MovementType.ADJUSTMENT,
-          quantity: difference,
-          previousStock,
-          newStock: dto.newStock,
-          reason: dto.reason,
-          userId: dto.userId,
-        },
-        include: {
-          product: true,
-          user: true,
-        },
-      });
-
-      return movement;
-    });
-
-    return InventoryMovement.fromPersistence(data);
-  }
-
-  async createMovementWithPrice(
-    params: CreateMovementWithPriceParams,
-    previousStock: number,
-    newStock: number,
-    newPrice: number,
-  ): Promise<InventoryMovement> {
-    const data = await this.prisma.$transaction(async (prisma) => {
-      await prisma.product.update({
-        where: { id: params.productId },
-        data: { stock: newStock, price: newPrice },
-      });
-
-      const movement = await prisma.inventoryMovement.create({
-        data: {
-          productId: params.productId,
-          type: params.type,
-          quantity: params.quantity,
-          previousStock,
-          newStock,
-          reason: params.reason,
-          reference: params.reference,
-          notes: params.notes,
-        },
-        include: {
-          product: true,
-          user: true,
-        },
-      });
-
-      return movement;
-    });
-
-    return InventoryMovement.fromPersistence(data);
-  }
-
-  /**
-   * Find a product by ID.
-   * @returns Product data or null if not found
-   */
-  async findProductById(id: string): Promise<Product | null> {
-    return this.prisma.product.findUnique({
-      where: { id },
-    }) as Promise<Product | null>;
-  }
-
-  /**
-   * Get movement history for a specific product.
-   * @throws NotFoundException if product not found
-   */
-  async getProductHistory(productId: string, limit?: number): Promise<InventoryMovement[]> {
-    const data = await this.prisma.inventoryMovement.findMany({
-      where: { productId },
+  async createMovimiento(dto: CreateMovimientoParams): Promise<StockMovement> {
+    const data = await this.prisma.movimientos_stock.create({
+      data: {
+        producto_id: dto.producto_id,
+        lote_id: dto.lote_id,
+        tipo_movimiento: dto.tipo_movimiento,
+        cantidad: dto.cantidad,
+        referencia: dto.referencia,
+        observaciones: dto.observaciones,
+        usuario_id: dto.usuario_id,
+      },
       include: {
-        product: true,
-        user: true,
+        productos: true,
+        lotes: true,
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: limit,
     });
 
-    return data.map((item) => InventoryMovement.fromPersistence(item));
+    return StockMovement.fromPersistence(data);
   }
 
   /**
-   * Get all movements with optional filters.
+   * Find all movimientos with filters
    */
-  async getAllMovements(params?: {
-    type?: MovementType;
-    startDate?: Date;
-    endDate?: Date;
-    productId?: string;
-  }): Promise<InventoryMovement[]> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async findAll(params?: {
+    tipo_movimiento?: string;
+    producto_id?: string;
+    fecha_inicio?: Date;
+    fecha_fin?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<StockMovement[]> {
     const where: any = {};
 
-    if (params?.type) {
-      where.type = params.type;
+    if (params?.tipo_movimiento) {
+      where.tipo_movimiento = params.tipo_movimiento;
     }
 
-    if (params?.productId) {
-      where.productId = params.productId;
+    if (params?.producto_id) {
+      where.producto_id = params.producto_id;
     }
 
-    if (params?.startDate || params?.endDate) {
-      where.createdAt = {};
-      if (params.startDate) {
-        where.createdAt.gte = params.startDate;
+    if (params?.fecha_inicio || params?.fecha_fin) {
+      where.fecha = {};
+      if (params.fecha_inicio) {
+        where.fecha.gte = params.fecha_inicio;
       }
-      if (params.endDate) {
-        where.createdAt.lte = params.endDate;
+      if (params.fecha_fin) {
+        where.fecha.lte = params.fecha_fin;
       }
     }
 
-    const data = await this.prisma.inventoryMovement.findMany({
+    const data = await this.prisma.movimientos_stock.findMany({
       where,
       include: {
-        product: true,
-        user: true,
+        productos: true,
+        lotes: true,
       },
-      orderBy: {
-        createdAt: 'desc',
+      orderBy: { fecha: 'desc' },
+      take: params?.limit || 20,
+      skip: params?.offset || 0,
+    });
+
+    return data.map((item) => StockMovement.fromPersistence(item));
+  }
+
+  /**
+   * Find movimiento by ID
+   */
+  async findById(id: string): Promise<StockMovement | null> {
+    const data = await this.prisma.movimientos_stock.findUnique({
+      where: { id },
+      include: {
+        productos: true,
+        lotes: true,
       },
     });
 
-    return data.map((item) => InventoryMovement.fromPersistence(item));
+    return data ? StockMovement.fromPersistence(data) : null;
   }
 
   /**
-   * Get current stock level for a product.
-   * @throws NotFoundException if product not found
+   * Get movement history for a producto
    */
-  async getCurrentStock(productId: string): Promise<number> {
-    const product = await this.findProductById(productId);
-    
-    if (!product) {
-      throw new NotFoundException(`Product with ID ${productId} not found`);
+  async findByProducto(productoId: string, limit?: number): Promise<StockMovement[]> {
+    const data = await this.prisma.movimientos_stock.findMany({
+      where: { producto_id: productoId },
+      include: {
+        productos: true,
+        lotes: true,
+      },
+      orderBy: { fecha: 'desc' },
+      take: limit || 20,
+    });
+
+    return data.map((item) => StockMovement.fromPersistence(item));
+  }
+
+  /**
+   * Record entry movement (ENTRADA) - adds stock to lote
+   */
+  async recordEntrada(
+    productoId: string,
+    loteId: string,
+    cantidad: number,
+    params?: {
+      referencia?: string;
+      observaciones?: string;
+      usuario_id?: string;
+    },
+  ): Promise<StockMovement> {
+    // Create movement record
+    const movimiento = await this.createMovimiento({
+      producto_id: productoId,
+      lote_id: loteId,
+      tipo_movimiento: 'entrada',
+      cantidad,
+      referencia: params?.referencia,
+      observaciones: params?.observaciones,
+      usuario_id: params?.usuario_id,
+    });
+
+    // Update lote quantity
+    await this.lotesRepository.updateStock(loteId, cantidad);
+
+    return movimiento;
+  }
+
+  /**
+   * Record adjustment (AJUSTE) - modifies stock directly
+   */
+  async recordAjuste(
+    productoId: string,
+    newStock: number,
+    params?: {
+      lote_id?: string;
+      referencia?: string;
+      observaciones?: string;
+      usuario_id?: string;
+    },
+  ): Promise<StockMovement> {
+    // For products with lotes, need to calculate difference
+    if (params?.lote_id) {
+      const lote = await this.lotesRepository.findById(params.lote_id);
+      if (!lote) {
+        throw new NotFoundException(`Lote no encontrado`);
+      }
+
+      const diferencia = newStock - lote.cantidad_actual;
+
+      const movimiento = await this.createMovimiento({
+        producto_id: productoId,
+        lote_id: params.lote_id,
+        tipo_movimiento: diferencia >= 0 ? 'ajuste_positivo' : 'ajuste_negativo',
+        cantidad: diferencia,
+        referencia: params?.referencia,
+        observaciones: params?.observaciones,
+        usuario_id: params?.usuario_id,
+      });
+
+      await this.lotesRepository.updateStock(params.lote_id, diferencia);
+
+      return movimiento;
     }
 
-    return product.stock;
+    // For products without lotes - create adjustment with reason
+    const movimiento = await this.createMovimiento({
+      producto_id: productoId,
+      tipo_movimiento: newStock >= 0 ? 'ajuste_positivo' : 'ajuste_negativo',
+      cantidad: newStock,
+      referencia: params?.referencia,
+      observaciones: params?.observaciones,
+      usuario_id: params?.usuario_id,
+    });
+
+    return movimiento;
   }
 
   /**
-   * Get products with low stock (below minimum threshold).
-   * Products are considered "low stock" when: stock <= minStock
-   * @param threshold Optional custom threshold to use instead of minStock
+   * Record shrinkage (MERMA)
    */
-  async getLowStockProducts(threshold?: number): Promise<Product[]> {
-    // Use raw SQL for this query since Prisma doesn't support column comparisons
-    const query = threshold !== undefined
-      ? `SELECT * FROM products WHERE stock <= $1 AND "isActive" = true ORDER BY stock ASC`
-      : `SELECT * FROM products WHERE stock <= "minStock" AND "isActive" = true ORDER BY stock ASC`;
+  async recordMerma(
+    productoId: string,
+    loteId: string,
+    cantidad: number,
+    params?: {
+      referencia?: string;
+      observaciones?: string;
+      usuario_id?: string;
+    },
+  ): Promise<StockMovement> {
+    const movimiento = await this.createMovimiento({
+      producto_id: productoId,
+      lote_id: loteId,
+      tipo_movimiento: 'merma',
+      cantidad,
+      referencia: params?.referencia,
+      observaciones: params?.observaciones,
+      usuario_id: params?.usuario_id,
+    });
 
-    const params = threshold !== undefined ? [threshold] : [];
-    
-    return this.prisma.$queryRawUnsafe<Product[]>(query, ...params);
+    // Deduct from lote
+    await this.lotesRepository.updateStock(loteId, -cantidad);
+
+    return movimiento;
+  }
+
+  /**
+   * Get total stock for a producto (from lotes)
+   */
+  async getTotalStock(productoId: string): Promise<number> {
+    const lotes = await this.lotesRepository.findByProductoWithStock(productoId);
+    return lotes.reduce((sum, lote) => sum + lote.cantidad_actual, 0);
+  }
+
+  /**
+   * Find productos with low stock
+   * Uses lotes aggregate where cantidad_actual < stock_minimo
+   */
+  async findLowStock(): Promise<any[]> {
+    const productos = await this.prisma.productos.findMany({
+      where: { activo: true, maneja_stock: true },
+      include: {
+        lotes: { where: { activo: true } },
+        proveedores: true,
+        rubros: true,
+      },
+    });
+
+    return productos
+      .filter((producto) => {
+        const totalStock = producto.lotes.reduce(
+          (sum, lote) => sum + lote.cantidad_actual,
+          0,
+        );
+        return totalStock < (producto.stock_minimo || 20);
+      })
+      .map((producto) => ({
+        id: producto.id,
+        codigo: producto.codigo,
+        detalle: producto.detalle,
+        stock_minimo: producto.stock_minimo,
+        stock_actual: producto.lotes.reduce(
+          (sum, lote) => sum + lote.cantidad_actual,
+          0,
+        ),
+      }));
+  }
+
+  /**
+   * Count movements
+   */
+  async count(params?: {
+    tipo_movimiento?: string;
+    producto_id?: string;
+  }): Promise<number> {
+    const where: any = {};
+
+    if (params?.tipo_movimiento) {
+      where.tipo_movimiento = params.tipo_movimiento;
+    }
+
+    if (params?.producto_id) {
+      where.producto_id = params.producto_id;
+    }
+
+    return this.prisma.movimientos_stock.count({ where });
   }
 }

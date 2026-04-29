@@ -1,236 +1,175 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { ISalesRepository } from './sales.repository.interface';
-import { Sale } from '../entities/sale.entity';
-import { RepositoryException } from '../../shared/exceptions/repository.exception';
-import { MovementType } from '@prisma/client';
 
-/**
- * SalesRepository
- * 
- * Concrete implementation of ISalesRepository using Prisma.
- * Handles data persistence for Sales with transaction support.
- */
 @Injectable()
 export class SalesRepository implements ISalesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Create a new sale.
-   * @throws RepositoryException on database errors
-   */
-  async create(dto: {
-    saleNumber: string;
-    items: Array<{
-      productId: string;
-      quantity: number;
-      unitPrice: number;
-      subtotal: number;
-      productName: string;
-    }>;
-    total: number;
-    paymentMethod: string;
-    status: string;
-    userId?: string;
-  }): Promise<Sale> {
-    try {
-      const data = await this.prisma.sale.create({
-        data: {
-          saleNumber: dto.saleNumber,
-          totalAmount: dto.total,
-          subtotal: dto.total,
-          taxAmount: 0,
-          discountAmount: 0,
-          paymentMethod: dto.paymentMethod,
-          status: dto.status,
-          cashierId: dto.userId,
-          items: {
-            create: dto.items.map((item) => ({
-              productId: item.productId,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              subtotal: item.subtotal,
-              taxAmount: 0,
-              discount: 0,
-              totalAmount: item.subtotal,
-            })),
-          },
-        },
-        include: {
-          items: true,
-        },
-      });
-
-      return Sale.fromPersistence(data);
-    } catch (error) {
-      throw new RepositoryException(
-        'Failed to create sale',
-        500,
-        { originalError: error instanceof Error ? error.message : 'Unknown error' },
-      );
-    }
+  async executeTransaction<T>(fn: (tx: any) => Promise<T>, options?: any): Promise<T> {
+    return this.prisma.$transaction(fn, options);
   }
 
-  /**
-   * Find a sale by ID.
-   * @returns Sale entity or null if not found
-   */
-  async findById(id: string): Promise<Sale | null> {
-    const data = await this.prisma.sale.findUnique({
-      where: { id },
-      include: { items: true },
-    });
-
-    return data ? Sale.fromPersistence(data) : null;
+  private getClient(tx?: any) {
+    return tx || this.prisma;
   }
 
-  /**
-   * Update an existing sale.
-   * @throws RepositoryException if sale not found or on database errors
-   */
-  async update(
-    id: string,
-    updateData: Partial<{
-      status: string;
-      cancelledAt: Date;
-    }>,
-  ): Promise<Sale> {
-    try {
-      const data = await this.prisma.sale.update({
-        where: { id },
-        data: updateData,
-        include: { items: true },
-      });
-
-      return Sale.fromPersistence(data);
-    } catch (error) {
-      throw new RepositoryException(
-        'Failed to update sale',
-        500,
-        { originalError: error instanceof Error ? error.message : 'Unknown error' },
-      );
-    }
+  async findCajaById(id: string, tx?: any): Promise<any> {
+    return this.getClient(tx).cajas.findUnique({ where: { id } });
   }
 
-  /**
-   * Cancel a sale (updates status and sets cancelledAt).
-   * Restores stock and creates inventory movements.
-   * @throws RepositoryException if sale not found or already cancelled
-   */
-  async cancel(id: string, userId: string): Promise<Sale> {
-    return this.prisma.$transaction(async (tx) => {
-      // Fetch sale with items
-      const sale = await tx.sale.findUnique({
-        where: { id },
-        include: { items: true },
-      });
-
-      if (!sale) {
-        throw new RepositoryException(`Sale ${id} not found`, 404);
-      }
-
-      if (sale.status !== 'completed') {
-        throw new RepositoryException(
-          `Sale ${sale.saleNumber} cannot be cancelled: current status is ${sale.status}`,
-          409,
-        );
-      }
-
-      // Restore stock for each item
-      for (const item of sale.items) {
-        const product = await tx.product.findUnique({
-          where: { id: item.productId },
-        });
-
-        if (!product) continue; // Defensive: product deleted after sale
-
-        // Increment stock
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stock: { increment: item.quantity } },
-        });
-
-        // Create inventory movement record
-        await tx.inventoryMovement.create({
-          data: {
-            productId: item.productId,
-            type: MovementType.ENTRY,
-            quantity: item.quantity,
-            previousStock: product.stock,
-            newStock: product.stock + item.quantity,
-            reason: 'Sale cancellation',
-            reference: sale.saleNumber,
-            userId,
-          },
-        });
-      }
-
-      // Update sale status
-      const updatedSale = await tx.sale.update({
-        where: { id },
-        data: {
-          status: 'cancelled',
-        },
-        include: { items: true },
-      });
-
-      return Sale.fromPersistence(updatedSale);
-    });
-  }
-
-  /**
-   * Find sales by date range.
-   */
-  async findByDateRange(startDate: Date, endDate: Date): Promise<Sale[]> {
-    const data = await this.prisma.sale.findMany({
-      where: {
-        createdAt: {
-          gte: startDate,
-          lte: endDate,
-        },
+  async findProductosActivos(ids: string[], tx?: any): Promise<any[]> {
+    return this.getClient(tx).productos.findMany({
+      where: { id: { in: ids }, activo: true },
+      select: {
+        id: true,
+        detalle: true,
+        codigo: true,
+        precio_venta: true,
+        requiere_precio_manual: true,
+        maneja_lotes: true,
+        maneja_stock: true,
+        iva: true,
+        activo: true,
       },
-      include: { items: true },
-      orderBy: { createdAt: 'desc' },
     });
-
-    return data.map((item) => Sale.fromPersistence(item));
   }
 
-  /**
-   * Find all sales with optional filters.
-   */
-  async findAll(filters?: {
-    status?: string;
-    paymentMethod?: string;
-    startDate?: Date;
-    endDate?: Date;
-  }): Promise<Sale[]> {
-    const where: any = {};
+  async getStockDisponible(productoId: string, tx?: any): Promise<number> {
+    const client = this.getClient(tx);
+    const stockView = await client.$queryRaw`
+      SELECT stock_total FROM v_stock_actual
+      WHERE producto_id = ${productoId}::uuid
+    `;
+    return Number((stockView as any)[0]?.stock_total ?? 0);
+  }
 
-    if (filters?.status) {
-      where.status = filters.status;
-    }
-
-    if (filters?.paymentMethod) {
-      where.paymentMethod = filters.paymentMethod;
-    }
-
-    if (filters?.startDate || filters?.endDate) {
-      where.createdAt = {};
-      if (filters.startDate) {
-        where.createdAt.gte = filters.startDate;
-      }
-      if (filters.endDate) {
-        where.createdAt.lte = filters.endDate;
-      }
-    }
-
-    const data = await this.prisma.sale.findMany({
-      where,
-      include: { items: true },
-      orderBy: { createdAt: 'desc' },
+  async findLotesDisponibles(productoId: string, tx?: any): Promise<any[]> {
+    return this.getClient(tx).lotes.findMany({
+      where: {
+        producto_id: productoId,
+        activo: true,
+        cantidad_actual: { gt: 0 },
+      },
+      orderBy: { fecha_vencimiento: 'asc' }, // FEFO
     });
+  }
 
-    return data.map((item) => Sale.fromPersistence(item));
+  async getUltimaVentaCajaByPrefix(cajaId: string, prefix: string, tx?: any): Promise<any> {
+    return this.getClient(tx).ventas.findFirst({
+      where: {
+        caja_id: cajaId,
+        numero_ticket: { startsWith: prefix },
+      },
+      orderBy: { numero_ticket: 'desc' },
+    });
+  }
+
+  async crearVenta(data: any, tx?: any): Promise<any> {
+    return this.getClient(tx).ventas.create({ data });
+  }
+
+  async crearDetallesVenta(data: any[], tx?: any): Promise<any> {
+    return this.getClient(tx).detalle_ventas.createMany({ data });
+  }
+
+  async crearMediosPago(data: any[], tx?: any): Promise<any> {
+    return this.getClient(tx).medios_pago_venta.createMany({ data });
+  }
+
+  async crearMovimientosStock(data: any[], tx?: any): Promise<any> {
+    for (const mov of data) {
+      await this.getClient(tx).movimientos_stock.create({ data: mov });
+    }
+  }
+
+  async getVentaCompleta(id: string, tx?: any): Promise<any> {
+    return this.getClient(tx).ventas.findUnique({
+      where: { id },
+      include: {
+        detalle_ventas: {
+          include: {
+            productos: { select: { codigo: true, detalle: true } },
+            lotes: { select: { numero_lote: true } },
+            promociones: { select: { nombre: true } },
+          },
+        },
+        medios_pago_venta: true,
+        cajas: { select: { numero: true, nombre: true } },
+        usuarios: { select: { username: true } },
+      },
+    });
+  }
+
+  async findAll(filters: any, skip: number, take: number): Promise<[any[], number]> {
+    const where: any = {
+      anulada: filters.incluir_anuladas ? undefined : false,
+    };
+
+    if (filters.caja_id) where.caja_id = filters.caja_id;
+    if (filters.fecha_desde || filters.fecha_hasta) {
+      where.fecha = {};
+      if (filters.fecha_desde) where.fecha.gte = new Date(filters.fecha_desde);
+      if (filters.fecha_hasta) where.fecha.lte = new Date(filters.fecha_hasta);
+    }
+
+    return Promise.all([
+      this.prisma.ventas.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { fecha: 'desc' },
+        include: {
+          cajas: { select: { numero: true, nombre: true } },
+          usuarios: { select: { username: true } },
+          _count: { select: { detalle_ventas: true, medios_pago_venta: true } },
+        },
+      }),
+      this.prisma.ventas.count({ where }),
+    ]);
+  }
+
+  async findOne(id: string): Promise<any> {
+    return this.getVentaCompleta(id);
+  }
+
+  async findByNumeroTicket(numeroTicket: string): Promise<any> {
+    return this.prisma.ventas.findFirst({
+      where: { numero_ticket: numeroTicket },
+      include: {
+        detalle_ventas: {
+          include: {
+            productos: { select: { codigo: true, detalle: true } },
+          },
+        },
+        medios_pago_venta: true,
+      },
+    });
+  }
+
+  async findByCajaHoy(cajaId: string, hoy: Date, manana: Date): Promise<any[]> {
+    return this.prisma.ventas.findMany({
+      where: {
+        caja_id: cajaId,
+        fecha: { gte: hoy, lt: manana },
+        anulada: false,
+      },
+      orderBy: { fecha: 'desc' },
+      include: {
+        detalle_ventas: true,
+        medios_pago_venta: true,
+      },
+    });
+  }
+
+  async anularVenta(id: string, motivo: string): Promise<any> {
+    return this.prisma.ventas.update({
+      where: { id },
+      data: {
+        anulada: true,
+        motivo_anulacion: motivo,
+        fecha_anulacion: new Date(),
+      },
+    });
   }
 }

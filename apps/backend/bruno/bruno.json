@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "Omnia POS Backend",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

@@ -1,3 +1,8 @@
+// Base event classes
+export * from './domain-event.base';
+export * from './integration-event.base';
+
+// Domain events
 export * from './product-created.event';
 export * from './product-updated.event';
 export * from './product-deleted.event';
@@ -9,3 +14,4 @@ export * from './pricing-recalculated.event';
 export * from './price-changed.event';
 export * from './sale-created.event';
 export * from './sale-cancelled.event';
+export * from './devolucion-created.event';

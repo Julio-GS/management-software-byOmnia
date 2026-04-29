@@ -1,37 +1,35 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { CreateProductCommand } from '../create-product.command';
-import { ProductsService } from '../../products.service';
+import { ProductsEsService } from '../../products-es.service';
+import { CreateProductDto } from '../../dto/create-product-es.dto';
 
 /**
  * CreateProductHandler
  * 
- * Handles CreateProductCommand by delegating to ProductsService.
- * Thin wrapper — no business logic, just command-to-DTO transformation.
+ * Handles CreateProductCommand by delegating to ProductsEsService.
+ * Translates English command properties to Spanish DTO properties.
  */
 @CommandHandler(CreateProductCommand)
 export class CreateProductHandler implements ICommandHandler<CreateProductCommand> {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(private readonly ProductsEsService: ProductsEsService) {}
 
   async execute(command: CreateProductCommand): Promise<any> {
-    // Transform command to DTO (1-to-1 mapping)
-    const createProductDto = {
-      name: command.name,
-      description: command.description,
-      price: command.price,
-      cost: command.cost,
-      sku: command.sku,
-      barcode: command.barcode,
-      stock: command.stock,
-      minStock: command.minStock,
-      maxStock: command.maxStock,
-      categoryId: command.categoryId,
-      markup: command.markup,
-      taxRate: command.taxRate,
-      imageUrl: command.imageUrl,
-      isActive: command.isActive,
+    // Transform command (English) to Spanish DTO
+    const createProductDto: CreateProductDto = {
+      codigo: command.sku,
+      detalle: command.name,
+      codigo_barras: command.barcode,
+      costo: command.cost,
+      precio_venta: command.price,
+      iva: command.taxRate,
+      stock_minimo: command.minStock,
+      rubro_id: command.categoryId,
+      requiere_precio_manual: false,
+      maneja_stock: true,
     };
 
     // Delegate to service
-    return this.productsService.create(createProductDto);
+    return this.ProductsEsService.create(createProductDto);
   }
 }
+

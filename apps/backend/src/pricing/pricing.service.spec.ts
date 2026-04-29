@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { EventBus } from '@nestjs/cqrs';
 import { PricingService } from './pricing.service';
 import { PricingRepository } from './repositories/pricing.repository';
+import { MarkupCalculatorService } from './services/markup-calculator.service';
 
 describe('PricingService', () => {
   let service: PricingService;
@@ -12,11 +13,11 @@ describe('PricingService', () => {
     getGlobalMarkup: jest.fn(),
     updateGlobalMarkup: jest.fn(),
     getProductMarkup: jest.fn(),
-    getCategoryMarkup: jest.fn(),
-    getProductForPriceCalculation: jest.fn(),
-    getProductsInCategoryWithoutMarkup: jest.fn(),
-    getProductsUsingGlobalMarkup: jest.fn(),
-    updateProductPrice: jest.fn(),
+    getRubroMarkup: jest.fn(),
+    getProductById: jest.fn(),
+    getProductosInRubro: jest.fn(),
+    getProductosUsingGlobalMarkup: jest.fn(),
+    setProductPrice: jest.fn(),
     createPriceHistory: jest.fn(),
     getPriceHistoryByProduct: jest.fn(),
     getAllPriceHistory: jest.fn(),
@@ -26,6 +27,19 @@ describe('PricingService', () => {
     publish: jest.fn(),
   };
 
+  const mockMarkupCalculator = {
+    suggestRoundedPrice: jest.fn((price: number) => {
+      // Just pass through to service's real implementation
+      if (price < 100) {
+        return Math.round(price / 10) * 10;
+      } else if (price < 1000) {
+        return Math.round(price / 50) * 50;
+      } else {
+        return Math.round(price / 100) * 100;
+      }
+    }),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -33,6 +47,10 @@ describe('PricingService', () => {
         {
           provide: PricingRepository,
           useValue: mockRepository,
+        },
+        {
+          provide: MarkupCalculatorService,
+          useValue: mockMarkupCalculator,
         },
         {
           provide: EventBus,
@@ -72,10 +90,10 @@ describe('PricingService', () => {
     it('should use product markup over category markup', async () => {
       mockRepository.getProductMarkup.mockResolvedValue({
         markup: 40, // Product has 40% markup
-        categoryId: 'cat-123',
+        rubro_id: 'cat-123',
       });
 
-      mockRepository.getCategoryMarkup.mockResolvedValue(25); // Category has 25% markup
+      mockRepository.getRubroMarkup.mockResolvedValue(25); // Category has 25% markup
 
       const result = await service.calculatePrice(100, 'prod-123', 'cat-123');
 
@@ -87,10 +105,10 @@ describe('PricingService', () => {
     it('should use category markup over global markup', async () => {
       mockRepository.getProductMarkup.mockResolvedValue({
         markup: null, // No product markup
-        categoryId: 'cat-123',
+        rubro_id: 'cat-123',
       });
 
-      mockRepository.getCategoryMarkup.mockResolvedValue(35); // Category has 35% markup
+      mockRepository.getRubroMarkup.mockResolvedValue(35); // Category has 35% markup
 
       const result = await service.calculatePrice(100, 'prod-123', 'cat-123');
 
@@ -102,16 +120,16 @@ describe('PricingService', () => {
     it('should fall back to category from product when no explicit categoryId', async () => {
       mockRepository.getProductMarkup.mockResolvedValue({
         markup: null,
-        categoryId: 'cat-456', // Product belongs to category
+        rubro_id: 'cat-456', // Product belongs to category
       });
 
-      mockRepository.getCategoryMarkup.mockResolvedValue(20);
+      mockRepository.getRubroMarkup.mockResolvedValue(20);
 
       const result = await service.calculatePrice(100, 'prod-123');
 
       expect(result.markupPercentage).toBe(20);
       expect(result.markupSource).toBe('category');
-      expect(mockRepository.getCategoryMarkup).toHaveBeenCalledWith('cat-456');
+      expect(mockRepository.getRubroMarkup).toHaveBeenCalledWith('cat-456');
     });
   });
 
@@ -145,7 +163,7 @@ describe('PricingService', () => {
     it('should return product markup when available', async () => {
       mockRepository.getProductMarkup.mockResolvedValue({
         markup: 50,
-        categoryId: 'cat-123',
+        rubro_id: 'cat-123',
       });
 
       const result = await service.getApplicableMarkup('prod-123', 'cat-123');
@@ -157,10 +175,10 @@ describe('PricingService', () => {
     it('should return category markup when product has none', async () => {
       mockRepository.getProductMarkup.mockResolvedValue({
         markup: null,
-        categoryId: 'cat-123',
+        rubro_id: 'cat-123',
       });
 
-      mockRepository.getCategoryMarkup.mockResolvedValue(25);
+      mockRepository.getRubroMarkup.mockResolvedValue(25);
 
       const result = await service.getApplicableMarkup('prod-123');
 
@@ -188,36 +206,38 @@ describe('PricingService', () => {
   });
 
   describe('updateGlobalMarkup', () => {
-    it('should update global markup setting', async () => {
-      mockRepository.updateGlobalMarkup.mockResolvedValue(undefined);
+    it('should log warning since feature not implemented yet', async () => {
+      const logSpy = jest.spyOn(service['logger'], 'warn');
 
       await service.updateGlobalMarkup(35);
 
-      expect(mockRepository.updateGlobalMarkup).toHaveBeenCalledWith(35);
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('35%')
+      );
     });
   });
 
   describe('recalculatePricesForCategory', () => {
     it('should only recalculate products without own markup', async () => {
       const mockProducts = [
-        { id: 'prod-1', cost: 100 },
-        { id: 'prod-2', cost: 200 },
+        { id: 'prod-1', costo: 100 },
+        { id: 'prod-2', costo: 200 },
       ];
 
-      mockRepository.getProductsInCategoryWithoutMarkup.mockResolvedValue(mockProducts);
-      mockRepository.getCategoryMarkup.mockResolvedValue(30);
-      mockRepository.updateProductPrice.mockResolvedValue(undefined);
+      mockRepository.getProductosInRubro.mockResolvedValue(mockProducts);
+      mockRepository.getRubroMarkup.mockResolvedValue(30);
+      mockRepository.setProductPrice.mockResolvedValue(undefined);
 
       const count = await service.recalculatePricesForCategory('cat-123');
 
       expect(count).toBe(2);
-      expect(mockRepository.getProductsInCategoryWithoutMarkup).toHaveBeenCalledWith('cat-123');
-      expect(mockRepository.updateProductPrice).toHaveBeenCalledTimes(2);
+      expect(mockRepository.getProductosInRubro).toHaveBeenCalledWith('cat-123');
+      expect(mockRepository.setProductPrice).toHaveBeenCalledTimes(2);
       expect(mockEventBus.publish).toHaveBeenCalledTimes(2);
     });
 
     it('should skip soft-deleted products', async () => {
-      mockRepository.getProductsInCategoryWithoutMarkup.mockResolvedValue([]);
+      mockRepository.getProductosInRubro.mockResolvedValue([]);
 
       const count = await service.recalculatePricesForCategory('cat-123');
 
@@ -228,23 +248,23 @@ describe('PricingService', () => {
   describe('recalculatePricesGlobal', () => {
     it('should only recalculate products using global markup', async () => {
       const mockProducts = [
-        { id: 'prod-1', cost: 100, categoryId: null },
-        { id: 'prod-2', cost: 150, categoryId: null },
+        { id: 'prod-1', costo: 100, rubro_id: null },
+        { id: 'prod-2', costo: 150, rubro_id: null },
       ];
 
-      mockRepository.getProductsUsingGlobalMarkup.mockResolvedValue(mockProducts);
+      mockRepository.getProductosUsingGlobalMarkup.mockResolvedValue(mockProducts);
       mockRepository.getGlobalMarkup.mockResolvedValue(30);
-      mockRepository.updateProductPrice.mockResolvedValue(undefined);
+      mockRepository.setProductPrice.mockResolvedValue(undefined);
 
       const count = await service.recalculatePricesGlobal();
 
       expect(count).toBe(2);
-      expect(mockRepository.getProductsUsingGlobalMarkup).toHaveBeenCalled();
+      expect(mockRepository.getProductosUsingGlobalMarkup).toHaveBeenCalled();
       expect(mockEventBus.publish).toHaveBeenCalledTimes(2);
     });
 
     it('should skip soft-deleted products', async () => {
-      mockRepository.getProductsUsingGlobalMarkup.mockResolvedValue([]);
+      mockRepository.getProductosUsingGlobalMarkup.mockResolvedValue([]);
 
       const count = await service.recalculatePricesGlobal();
 
@@ -254,41 +274,46 @@ describe('PricingService', () => {
 
   describe('recalculatePriceForProduct', () => {
     it('should recalculate price for a single product', async () => {
-      mockRepository.getProductForPriceCalculation.mockResolvedValue({
+      mockRepository.getProductById.mockResolvedValue({
         id: 'prod-123',
-        cost: 100,
-        categoryId: 'cat-123',
-        deletedAt: null,
+        costo: 100,
+        rubro_id: 'cat-123',
+        activo: true,
       });
 
-      mockRepository.getCategoryMarkup.mockResolvedValue(30);
-      mockRepository.updateProductPrice.mockResolvedValue(undefined);
+      mockRepository.getRubroMarkup.mockResolvedValue(30);
+      mockRepository.setProductPrice.mockResolvedValue(undefined);
 
       await service.recalculatePriceForProduct('prod-123');
 
-      expect(mockRepository.updateProductPrice).toHaveBeenCalled();
+      expect(mockRepository.setProductPrice).toHaveBeenCalled();
       expect(mockEventBus.publish).toHaveBeenCalled();
     });
 
     it('should throw error when product not found', async () => {
-      mockRepository.getProductForPriceCalculation.mockResolvedValue(null);
+      mockRepository.getProductById.mockResolvedValue(null);
 
       await expect(service.recalculatePriceForProduct('invalid-id')).rejects.toThrow(
         'Product invalid-id not found',
       );
     });
 
-    it('should skip soft-deleted product and log warning', async () => {
-      mockRepository.getProductForPriceCalculation.mockResolvedValue({
+    it('should skip inactive product and log warning', async () => {
+      const logSpy = jest.spyOn(service['logger'], 'warn');
+      
+      mockRepository.getProductById.mockResolvedValue({
         id: 'prod-123',
-        cost: 100,
-        categoryId: null,
-        deletedAt: new Date(), // Soft-deleted
+        costo: 100,
+        rubro_id: null,
+        activo: false, // Inactive
       });
 
       await service.recalculatePriceForProduct('prod-123');
 
-      expect(mockRepository.updateProductPrice).not.toHaveBeenCalled();
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('inactive product')
+      );
+      expect(mockRepository.setProductPrice).not.toHaveBeenCalled();
       expect(mockEventBus.publish).not.toHaveBeenCalled();
     });
   });

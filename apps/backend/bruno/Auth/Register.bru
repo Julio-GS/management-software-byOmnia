@@ -1,0 +1,20 @@
+meta {
+  name: Auth Register
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/auth/register
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "username": "admin",
+    "password": "admin123",
+    "email": "admin@supermercado.com",
+    "role": "admin"
+  }
+}
